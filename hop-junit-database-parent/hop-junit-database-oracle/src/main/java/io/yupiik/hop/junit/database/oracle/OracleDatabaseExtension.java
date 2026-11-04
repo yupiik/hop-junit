@@ -186,9 +186,10 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
      * Oracle-Free 23c does not ship SYS.DBMS_CRYPTO and it cannot be granted to a non-SYS user, yet
      * archive/sync CHECK pipelines call DBMS_CRYPTO.HASH(...)/HASH_SH1 (grantable in prod on Oracle
      * 11/19). For the integration tests only we install a deterministic SYSTEM-owned stand-in named
-     * DBMS_CRYPTO + PUBLIC synonym + per-schema EXECUTE so the real pipeline SQL resolves and runs
-     * end-to-end. The tests assert pipeline success, not a specific digest, so the shim returns a
-     * stable non-null RAW derived from ORA_HASH. Production SQL is untouched.
+     * DBMS_CRYPTO + a per-schema EXECUTE grant and private synonym (a PUBLIC synonym is impossible here:
+     * Oracle-Free runs inside a PDB, where CREATE PUBLIC SYNONYM raises ORA-65040) so the real pipeline
+     * SQL resolves and runs end-to-end. The tests assert pipeline success, not a specific digest, so the
+     * shim returns a stable non-null RAW derived from SYS_GUID. Production SQL is untouched.
      */
     private void installDbmsCryptoShim(final Connection admin, final Map<String, ManagedDatabase> specs)
             throws SQLException {
@@ -196,29 +197,36 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
         try (var statement = admin.createStatement()) {
             execQuiet(statement, "ALTER SESSION SET CURRENT_SCHEMA = SYSTEM");
             // Oracle-Free 23c ships no DBMS_CRYPTO.HASH usable from SQL, so provide a TEST-ONLY stand-in.
-            // It must COMPILE RELIABLY when delivered via JDBC Statement.execute() (a broken body makes
-            // the package invalid -> ORA-06575). The body returns a constant RAW via HEXTORAW, which is
-            // pure and cannot reference anything.
-            execQuiet(
-                    statement,
-                    "CREATE OR REPLACE PACKAGE DBMS_CRYPTO AS "
-                            + "HASH_MD5 CONSTANT PLS_INTEGER := 2; "
-                            + "FUNCTION HASH_SH1 RETURN PLS_INTEGER; "
-                            + "FUNCTION HASH(p_data IN CLOB, p_type IN PLS_INTEGER) RETURN RAW; "
-                            + "FUNCTION HASH(p_data IN VARCHAR2, p_type IN PLS_INTEGER) RETURN RAW; "
-                            + "END DBMS_CRYPTO; "
-                            + "CREATE OR REPLACE PACKAGE BODY DBMS_CRYPTO AS "
-                            + "FUNCTION HASH_SH1 RETURN PLS_INTEGER IS BEGIN RETURN 4; END; "
-                            + "FUNCTION HASH(p_data IN CLOB, p_type IN PLS_INTEGER) RETURN RAW IS BEGIN "
-                            + "  RETURN HEXTORAW(SUBSTR(SYS_GUID(), 1, 32)); "
-                            + "END; "
-                            + "FUNCTION HASH(p_data IN VARCHAR2, p_type IN PLS_INTEGER) RETURN RAW IS BEGIN "
-                            + "  RETURN HEXTORAW(SUBSTR(SYS_GUID(), 1, 32)); "
-                            + "END; "
-                            + "END DBMS_CRYPTO; "
-                            + "CREATE OR REPLACE PUBLIC SYNONYM DBMS_CRYPTO FOR SYSTEM.DBMS_CRYPTO "
-                            + "GRANT EXECUTE ON SYSTEM.DBMS_CRYPTO TO SA "
-                            + "CREATE OR REPLACE SYNONYM SA.DBMS_CRYPTO FOR SYSTEM.DBMS_CRYPTO");
+            // It must COMPILE RELIABLY when delivered via JDBC Statement.execute(): Oracle JDBC does NOT
+            // split a multi-statement string on ';', it submits the whole string as a single command, so
+            // concatenating the package SPEC + BODY + SYNONYM + GRANT into one execute() call would only
+            // compile the first statement and leave the package INVALID (ORA-06575). Each DDL statement
+            // is therefore executed separately, each terminated with a trailing ';'. The body stays pure
+            // (HEXTORAW of a SYS_GUID) and cannot reference anything that would break compilation.
+            final String[] shim = {
+                "CREATE OR REPLACE PACKAGE DBMS_CRYPTO AS "
+                        + "HASH_MD5 CONSTANT PLS_INTEGER := 2; "
+                        + "FUNCTION HASH_SH1 RETURN PLS_INTEGER; "
+                        + "FUNCTION HASH(p_data IN CLOB, p_type IN PLS_INTEGER) RETURN RAW; "
+                        + "FUNCTION HASH(p_data IN VARCHAR2, p_type IN PLS_INTEGER) RETURN RAW; "
+                        + "END DBMS_CRYPTO; ",
+                "CREATE OR REPLACE PACKAGE BODY DBMS_CRYPTO AS "
+                        + "FUNCTION HASH_SH1 RETURN PLS_INTEGER IS BEGIN RETURN 4; END; "
+                        + "FUNCTION HASH(p_data IN CLOB, p_type IN PLS_INTEGER) RETURN RAW IS BEGIN "
+                        + "  RETURN HEXTORAW(SUBSTR(SYS_GUID(), 1, 32)); "
+                        + "END; "
+                        + "FUNCTION HASH(p_data IN VARCHAR2, p_type IN PLS_INTEGER) RETURN RAW IS BEGIN "
+                        + "  RETURN HEXTORAW(SUBSTR(SYS_GUID(), 1, 32)); "
+                        + "END; "
+                        + "END DBMS_CRYPTO; "
+            };
+            // NOTE: no CREATE [PUBLIC] SYNONYM / GRANT here - a PDB connection (Oracle-Free runs in
+            // freepdb1) rejects CREATE PUBLIC SYNONYM with ORA-65040, and each descriptor schema is
+            // granted EXECUTE + a private synonym in the loop below, which is enough for the pipeline
+            // SQL to resolve unqualified DBMS_CRYPTO.HASH(...).
+            for (final var ddl : shim) {
+                execQuiet(statement, ddl);
+            }
             for (final var managed : specs.values()) {
                 final var schema = managed.spec().schema().toUpperCase(Locale.ROOT);
                 tryExecTolerate(statement, "GRANT EXECUTE ON SYSTEM.DBMS_CRYPTO TO " + schema);
