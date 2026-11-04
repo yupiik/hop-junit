@@ -1,0 +1,4 @@
+dataset:
+  table: CLASS_ONLY
+  rows:
+    - id: 1

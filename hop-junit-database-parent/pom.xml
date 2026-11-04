@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>hop-junit-database-parent</artifactId>
+  <packaging>pom</packaging>
+  <name>Hop JUnit :: Database</name>
+  <description>Aggregator for the database testing framework: the engine-agnostic API and facade plus the concrete H2 and Oracle backends.</description>
+
+  <modules>
+    <module>hop-junit-database-api</module>
+    <module>hop-junit-database-core</module>
+    <module>hop-junit-database-dataset</module>
+    <module>hop-junit-database-testcontainers</module>
+    <module>hop-junit-database-h2</module>
+    <module>hop-junit-database-oracle</module>
+  </modules>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j2-impl</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

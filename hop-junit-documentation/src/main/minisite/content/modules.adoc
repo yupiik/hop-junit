@@ -1,0 +1,73 @@
+= Modules
+:minisite-left-menu-prefix:
+:minisite-index-title: Modules
+:minisite-index-description: The Hop JUnit artifacts, their responsibilities and how they fit together, including the H2-by-default / Oracle-via-profile module layout.
+:minisite-index-icon: fas fa-cubes
+:minisite-index: 10
+:minisite-breadcrumb: Home[#] > Modules
+:minisite-nav-prev-label: Home
+:minisite-nav-prev-link: index.html
+:minisite-nav-next-label: Quickstart
+:minisite-nav-next-link: quickstart.html
+
+Hop JUnit is split into a parent aggregator and small, focused modules. You only pull in what your
+tests actually need.
+
+== Database modules
+
+The database testing framework is grouped under the `hop-junit-database-parent` aggregator:
+
+* `hop-junit-database-api` - the engine-agnostic contract. It defines `BaseDatabaseExtension`
+  (the backend SPI), the `Descriptor`/`ManagedDatabase` records, and the pure-JDK types
+  `@DbInit`, `@DbExpected`, `@DbComparison`, `DatasetFormat`, `DatasetOperation`,
+  `DatabaseImplementation`, `H2DatabaseMode`, `JdbcNamed` and `JdbcConnectionSpec`. It has no DBUnit
+  and no Apache Hop dependency.
+* `hop-junit-database-core` - the `@Database` facade and its `DatabaseExtension`. It resolves the
+  backend through `java.util.ServiceLoader` (`DatabaseExtensionRegistry`), matching
+  `BaseDatabaseExtension.name()` against `DatabaseImplementation.current()`. No backend type is
+  referenced here, so the backend jars may be absent until the facade actually needs them.
+* `hop-junit-database-testcontainers` - the shared `TestContainerDatabaseExtension` plus the DBUnit
+  dataset engine (`DbUnitEngine`) and the SQL script runner (`SqlScriptRunner`). Both H2 and Oracle
+  seed/verify through `DbUnitEngine`.
+* `hop-junit-database-h2` - the H2 backend (`H2DatabaseExtension`, `@H2Database`), an in-memory
+  Oracle-compatible H2 database and a JDBC driver (`H2SqlRewriteDriver`) that rewrites Oracle SQL
+  for H2. Registered for the `H2` implementation.
+* `hop-junit-database-oracle` - the Oracle backend (`OracleDatabaseExtension`, `@OracleDatabase`),
+  backed by a real Oracle 23ai Free Testcontainers container with per-schema isolation. The Oracle
+  dependencies are declared unconditionally; you reference this module inside your own `-Poracle`
+  profile.
+
+== Hop execution and coverage
+
+* `hop-junit-core` - the Hop testing engine and scope coverage:
+  * `@HopPipeline` / `@HopPipelineFixture` / `@HopPipelineExtension` to run pipelines,
+  * `@HopWorkflow` / `@HopWorkflowFixture` / `@HopWorkflowExtension` to run workflows,
+  * `@HopParameters` / `@HopParameter` for execution parameters,
+  * `HopExecutionAssertions` and the fluent `assertSuccess()` / `assertFailure()` / `assertLogContains()`
+    API,
+  * the coverage package under `io.yupiik.hop.junit.hop.coverage`: `HopCoverageRuntime`,
+    the collectors, the post-processor, and the generic renderers. It also registers a
+    `LauncherSessionListener` so coverage is aggregated and reported when the test session closes.
+
+* `hop-junit-documentation` - this site.
+
+== Which modules do I need?
+
+.Typical classpaths
+[cols="1,1a", options="header"]
+|===
+|Use case |Modules
+|Run a pipeline or workflow test with H2 |`hop-junit-core` + `hop-junit-database-api` + `hop-junit-database-core` + `hop-junit-database-h2`
+|Same tests against real Oracle (add your own `-Poracle` profile) |the H2 set + `hop-junit-database-oracle`, and set `database.default.implementation=ORACLE`
+|Only the `@Database` facade, no Hop |`hop-junit-database-api` + `hop-junit-database-core` + (`hop-junit-database-h2` or `hop-junit-database-oracle`)
+|===
+
+== Oracle module placement
+
+`hop-junit-database-oracle` declares its Oracle dependencies (Testcontainers `oracle-free`,
+`ojdbc11`, `hop-databases-oracle`) unconditionally. It is **you**, the downstream consumer, who
+decides when those are present: put the `hop-junit-database-oracle` dependency inside your own
+`-Poracle` Maven profile and set `database.default.implementation=ORACLE` in that profile. Without
+the profile, only the pure H2 modules are on the classpath and H2 remains the default.
+
+See the <<quickstart.adoc#,Quickstart>> for a concrete `-Poracle` profile.

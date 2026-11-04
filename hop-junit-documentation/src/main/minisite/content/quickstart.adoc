@@ -1,0 +1,176 @@
+= Quickstart
+:minisite-left-menu-prefix:
+:minisite-index-title: Quickstart
+:minisite-index-description: Run a Hop pipeline or workflow test with H2 in a few minutes, then switch the same test to a real Oracle container behind a -Poracle profile.
+:minisite-index-icon: fas fa-rocket
+:minisite-index: 20
+:minisite-breadcrumb: Home[#] > Quickstart
+:minisite-nav-prev-label: Modules
+:minisite-nav-prev-link: modules.html
+:minisite-nav-next-label: Coverage
+:minisite-nav-next-link: coverage.html
+
+This walkthrough gets a minimal `@HopPipeline` test running against H2, then shows how to run the
+same test against a real Oracle container.
+
+== 1. Add the dependencies
+
+Declare the modules that give you the Hop fixture and the H2 database backend:
+
+[source,xml]
+----
+<dependencies>
+  <dependency>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-core</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </dependency>
+  <dependency>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-database-api</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </dependency>
+  <dependency>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-database-core</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </dependency>
+  <dependency>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-database-h2</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </dependency>
+</dependencies>
+----
+
+The backend is selected from the `database.default.implementation` system property, which defaults
+to `H2`. Nothing else is needed.
+
+== 2. Prepare a minimal pipeline
+
+Put a tiny pipeline under `src/test/resources/repositories/` (or any folder you point at via
+`projectHome`). For example `hello.hpl` that sets a result field or just starts and finishes.
+
+== 3. Write the test
+
+[source,java]
+----
+package com.acme;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import io.yupiik.hop.junit.database.DbExpected;
+import io.yupiik.hop.junit.database.DbInit;
+import io.yupiik.hop.junit.database.JdbcConnectionSpec;
+import io.yupiik.hop.junit.database.JdbcNamed;
+import io.yupiik.hop.junit.hop.HopPipeline;
+import io.yupiik.hop.junit.hop.HopPipelineFixture;
+import org.junit.jupiter.api.Test;
+
+class HelloTest {
+
+    @Test
+    @HopPipeline(value = "repositories/hello.hpl",
+            projectHome = "src/test/resources",
+            runConfiguration = "local")
+    void runs(final HopPipelineFixture pipeline) {
+        pipeline.with("greeting", "hello")
+                .execute()
+                .assertSuccess();
+    }
+}
+----
+
+The `HopPipelineFixture` wires the Hop project home, resolves the `.hpl`, configures the local run
+configuration, sets the parameters, and returns a fluent `HopPipelineExecution` you can assert on.
+
+== 4. Seed and verify a named database
+
+The `@Database` facade and its `@DbInit` / `@DbExpected` contract are the idiomatic way to seed a
+database and assert its post-conditions. Put an SQL schema script and a dataset on the test
+classpath, then:
+
+[source,java]
+----
+@Test
+@Database(name = "SRC", init = {
+        @DbInit("ddl/schema.sql"),
+        @DbInit(value = "datasets/prep.yml", operation = DatasetOperation.CLEAN_INSERT),
+}, expected = @DbExpected("datasets/expected.yml"))
+void seededDatabaseCanBeInjected(@JdbcNamed("SRC") final JdbcConnectionSpec src) {
+    // src.jdbcUrl() is the plain H2 URL, src.hopJdbcUrl() the one Hop should connect through.
+    assertEquals("H2", src.databaseTypeName());
+}
+----
+
+`@Database` is backend-agnostic: the H2 backend provides an Oracle-compatible H2 database
+(`H2DatabaseMode.ORACLE_EXTENDED` by default) with a SQL rewrite driver, so Oracle-style SQL and
+dictionary paths run unchanged. Use `@H2Database` when you need H2-specific knobs (e.g. a different
+`mode`).
+
+== 5. Run
+
+[source,bash]
+----
+mvn test
+----
+
+The H2 backend is fully in-memory - no Docker, no external service.
+
+== Running the same tests against real Oracle
+
+To exercise the identical test body against a real Oracle 23ai Free container, add the Oracle module
+inside your **own** `-Poracle` Maven profile (the Oracle module itself declares its dependencies
+unconditionally; the profile is the switch that decides when they are present):
+
+[source,xml]
+----
+<profiles>
+  <profile>
+    <id>oracle</id>
+    <properties>
+      <database.default.implementation>ORACLE</database.default.implementation>
+      <oracle.image>gvenzl/oracle-free:23-slim-faststart@sha256:f5ff19033860d662c821cb04eb10483fa94f14f78eae252d054291ea07028093</oracle.image>
+    </properties>
+    <dependencies>
+      <dependency>
+        <groupId>io.yupiik.hop.junit</groupId>
+        <artifactId>hop-junit-database-oracle</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+      </dependency>
+    </dependencies>
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <systemPropertyVariables>
+              <database.default.implementation>ORACLE</database.default.implementation>
+              <oracle.image>${oracle.image}</oracle.image>
+            </systemPropertyVariables>
+          </configuration>
+        </plugin>
+      </plugins>
+    </build>
+  </profile>
+</profiles>
+----
+
+Then run with Docker:
+
+[source,bash]
+----
+mvn verify -Poracle
+----
+
+What changes behind the scenes:
+
+* the `@Database` facade now resolves the `ORACLE` backend via `ServiceLoader`;
+* each named database becomes a schema (`SRC`, `TGT`, ...) on a single shared Oracle container;
+* the per-test lifecycle drops and recreates the schema so every test starts isolated
+  (mirroring H2's fresh-per-test in-memory database);
+* your tests and datasets are unchanged - which is the whole point of the facade.
+
+If the selected backend module is missing from the classpath, `DatabaseExtension` fails fast with a
+message telling you to add `hop-junit-database-h2` or `hop-junit-database-oracle`.

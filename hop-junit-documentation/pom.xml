@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>hop-junit-documentation</artifactId>
+  <packaging>pom</packaging>
+  <name>Hop JUnit :: Documentation</name>
+  <description>Consumer-oriented documentation site (minisite) for the Hop JUnit testing framework.</description>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.yupiik.maven</groupId>
+        <artifactId>yupiik-tools-maven-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>io.yupiik.maven</groupId>
+            <artifactId>asciidoc-java</artifactId>
+            <version>${yupiik-tools.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>minisite</id>
+            <goals>
+              <goal>minisite</goal>
+            </goals>
+            <phase>package</phase>
+            <configuration>
+              <preferYupiikAsciidoc>true</preferYupiikAsciidoc>
+              <source>${project.basedir}/src/main/minisite</source>
+              <target>${project.build.directory}/site</target>
+              <siteBase>.</siteBase>
+              <title>Hop JUnit - Documentation</title>
+              <description>JUnit 5 extension framework to test Apache Hop pipelines and workflows, with an engine-agnostic database facade (H2 by default, Oracle via Testcontainers).</description>
+              <indexText>Hop JUnit</indexText>
+              <indexSubTitle>Test Apache Hop pipelines and workflows with JUnit 5, and seed/verify databases through an engine-agnostic facade.</indexSubTitle>
+              <customHead><![CDATA[
+                <link rel="preconnect" href="https://fonts.googleapis.com">
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+              ]]></customHead>
+              <attributes>
+                <partialsdir>${project.basedir}/src/main/minisite/content/_partials</partialsdir>
+                <minisite-left-menu-prefix>.</minisite-left-menu-prefix>
+                <minisite-menu-1>/modules.html</minisite-menu-1>
+                <minisite-menu-1-title>Modules</minisite-menu-1-title>
+                <minisite-menu-1-icon>fas fa-cubes</minisite-menu-1-icon>
+                <minisite-menu-2>/quickstart.html</minisite-menu-2>
+                <minisite-menu-2-title>Quickstart</minisite-menu-2-title>
+                <minisite-menu-2-icon>fas fa-rocket</minisite-menu-2-icon>
+                <minisite-menu-3>/coverage.html</minisite-menu-3>
+                <minisite-menu-3-title>Coverage</minisite-menu-3-title>
+                <minisite-menu-3-icon>fas fa-chart-line</minisite-menu-3-icon>
+                <minisite-menu-4>/api.html</minisite-menu-4>
+                <minisite-menu-4-title>API</minisite-menu-4-title>
+                <minisite-menu-4-icon>fas fa-code</minisite-menu-4-icon>
+              </attributes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

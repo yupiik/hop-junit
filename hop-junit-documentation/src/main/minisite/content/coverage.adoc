@@ -1,0 +1,96 @@
+= Coverage
+:minisite-left-menu-prefix:
+:minisite-index-title: Coverage
+:minisite-index-description: Hop scope coverage: collect what your JUnit executions actually traverse in pipelines and workflows, enforce thresholds, and render JSON/HTML/ADOC reports.
+:minisite-index-icon: fas fa-chart-line
+:minisite-index: 30
+:minisite-breadcrumb: Home[#] > Coverage
+:minisite-nav-prev-label: Quickstart
+:minisite-nav-prev-link: quickstart.html
+:minisite-nav-next-label: API
+:minisite-nav-next-link: api.html
+
+Beyond pass/fail assertions, Hop JUnit measures **scope coverage**: which transforms and hops
+(Edges) of your pipelines and workflows your JUnit executions actually traversed. This is a graph
+coverage of the Hop artifacts, not a Java code-coverage metric.
+
+== How it works
+
+. A `LauncherSessionListener` is registered automatically through the standard JUnit service loader
+  mechanism (`META-INF/services/org.junit.platform.launcher.LauncherSessionListener`), so adding
+  `hop-junit-core` to the test classpath is enough.
+. When coverage is enabled (`hop.coverage.enabled=true`, the default), every `@HopPipeline` /
+  `@HopWorkflow` execution attaches a collector to the Hop engine and records nodes (transforms),
+  edges (hops) and row counters.
+. Pipelines executed **nested** inside workflows are captured by a Hop extension point
+  (`PipelineCoverageExtensionPoint`, registered idempotently when the runtime starts) and
+  deduplicated, so a pipeline run standalone and nested still counts its nodes once.
+. When the JUnit session closes, the runtime writes a raw JSON report and the post-processor merges
+  the executions, applies the required-coverage thresholds and renders the configured formats.
+
+== Configuration
+
+All knobs are system properties, typically set from the surefire plugin:
+
+[cols="2,1,3", options="header"]
+|===
+|Property |Default |Description
+|`hop.coverage.enabled` |`true` |Enable collection and reporting.
+|`hop.coverage.basedir` |`.` |Base directory paths are reported relative to.
+|`hop.coverage.workDir` |`target/hop-coverage` |Working directory for raw executions.
+|`hop.coverage.rawDir` |`<workDir>/raw` |Where the per-JVM raw JSON reports are written.
+|`hop.coverage.siteDir` |`target/hop-coverage/report` |Where the rendered reports are written.
+|`hop.coverage.report.format` |`JSON,HTML,ADOC` |Comma-separated list of `JSON`, `HTML`, `ADOC`.
+|`hop.coverage.requiredCoverage` |unset |Global required coverage in percent (e.g. `80`).
+|`hop.coverage.requiredCoverage.<ARTIFACT>` |global value |Per-artifact override, e.g. `hop.coverage.requiredCoverage.T_ARCHIVE_LOAD=66.0` (artifact name without extension).
+|`hop.coverage.failOnMalformedReport` |`true` |Fail the build when a raw report is malformed.
+|`hop.coverage.failOnWriteError` |`true` |Fail the build when a report cannot be written.
+|`hop.report.adoc.output` |`target/hop-coverage/report/coverage.adoc` |Where the ADOC report is written (include it in your own docs with `include::`).
+|===
+
+== Enforcing thresholds
+
+Declare the global threshold and, when needed, per-artifact overrides, and propagate them to the
+test JVM:
+
+[source,xml]
+----
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-surefire-plugin</artifactId>
+  <configuration>
+    <systemPropertyVariables>
+      <hop.coverage.enabled>true</hop.coverage.enabled>
+      <hop.coverage.basedir>${project.basedir}</hop.coverage.basedir>
+      <hop.coverage.requiredCoverage>80</hop.coverage.requiredCoverage>
+      <hop.coverage.requiredCoverage.T_ARCHIVE_LOAD>66.0</hop.coverage.requiredCoverage.T_ARCHIVE_LOAD>
+    </systemPropertyVariables>
+  </configuration>
+</plugin>
+----
+
+A pipeline or workflow whose coverage is below its threshold fails the build after the test run.
+
+== Rendering reports
+
+With `hop.coverage.report.format=JSON,HTML,ADOC`, the session close produces:
+
+* a machine-readable JSON report under `hop.coverage.rawDir` (one per JVM, merged by the
+  post-processor),
+* an HTML report under `hop.coverage.siteDir`,
+* an ADOC report written to `hop.report.adoc.output` (default
+  `target/hop-coverage/report/coverage.adoc`), designed to be pulled into your own AsciiDoc
+  documentation with a standard `include` directive pointing at that generated file.
+
+== Metrics
+
+For each execution Hop JUnit records:
+
+* **nodes** - every transform of the pipeline/workflow, with started/finished copies, input/output/
+  read/written rows and errors, and whether it was covered (started, finished, or inferred as
+  processing rows);
+* **edges** - every hop between transforms, with the transferred row count and whether it was
+  traversed;
+* **summary** - node coverage ratio, edge coverage ratio and branch coverage ratio
+  (an edge is a branch when its source transform has several enabled outgoing edges);
+* **run** - the JUnit test (class, method, display name, unique id) and the timing of the execution.

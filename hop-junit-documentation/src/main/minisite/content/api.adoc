@@ -1,0 +1,125 @@
+= API
+:minisite-left-menu-prefix:
+:minisite-index-title: API
+:minisite-index-description: The reference for the Hop JUnit annotations, fixtures, assertions and the database backend SPI.
+:minisite-index-icon: fas fa-code
+:minisite-index: 40
+:minisite-breadcrumb: Home[#] > API
+:minisite-nav-prev-label: Coverage
+:minisite-nav-prev-link: coverage.html
+:minisite-nav-next-label: Home
+:minisite-nav-next-link: index.html
+
+The framework is built from plain, instantiable classes with instance methods - no static utilities.
+This page is the reference for the main entry points.
+
+== Hop fixtures (`hop-junit-core`)
+
+=== `@HopPipeline` / `@HopWorkflow`
+
+Method annotations that declare which artifact to run. Both are repeatable and support a single-level
+meta-annotation alias for `@HopParameters`.
+
+[cols="2,4", options="header"]
+|===
+|Attribute |Description
+|`value()` |The artifact path, resolved against `projectHome()`.
+|`projectHome()` |The Hop project home; defaults to `src/main/repositories`.
+|`runConfiguration()` |The Hop run configuration used to build the engine; defaults to the local engine.
+|`parameters()` |Per-test `@HopParameter`s, merged last (highest precedence).
+|===
+
+The extension injects a `HopPipelineFixture` / `HopWorkflowFixture`:
+
+[source,java]
+----
+@Test
+@HopPipeline(value = "archive/T_ARCHIVE_LOAD.hpl", projectHome = "src/test/resources")
+void loads(final HopPipelineFixture pipeline) {
+    pipeline.with("archive.table", "CONTRACTS")
+            .withConnection("SRC_ORACLE", src)
+            .execute()
+            .assertSuccess()
+            .assertLogContains("Partition created");
+}
+----
+
+=== Parameters: `@HopParameters` / `@HopParameter`
+
+Merged in ascending precedence: class-level batch (unless the method-level occurrence opts out with
+`inherit = false`), then method-level batch, then the parameters declared on the pipeline/workflow
+annotation. A single-level alias works by putting `@HopParameters` on another annotation.
+
+=== Assertions: `HopPipelineExecution` / `HopWorkflowExecution`
+
+`execute()` returns a fluent execution object:
+
+* `assertSuccess()` / `assertFailure()` - Hop `Result` error count assertions, with the Hop log
+  appended to the failure message;
+* `assertLogContains(String)` - substring assertion on the Hop log text;
+* `logText()` / `result()` - direct access;
+* `assertThat(Consumer)` - group custom assertions.
+
+== Database facade (`hop-junit-database-core`)
+
+=== `@Database`
+
+Repeatable method annotation declaring a named database; the same test body runs on both backends.
+Attributes: `name()`, `init()` (`@DbInit[]`), `expected()` (`@DbExpected[]`). The backend is resolved
+from `database.default.implementation` (default `H2`) through `java.util.ServiceLoader`; the
+`database.default.h2.mode` property (default `ORACLE_EXTENDED`) selects the H2 compatibility mode.
+
+=== `@DbInit` / `@DbExpected`
+
+`@DbInit` seeds the database: `*.sql` resources run as raw statements (schemas/DDL), anything else is
+loaded as a DBUnit dataset and applied with `operation()` (`CLEAN_INSERT` by default). Optional knobs:
+`format()` (`AUTO` infers from the extension), `supportedDatabases()` (empty = all), `admin()` (run
+through the admin connection - Oracle provisioning), `caseSensitive()`.
+
+`@DbExpected` verifies a post-condition dataset in `afterEach`, only when the test passed. Knobs:
+`format()`, `comparison()` (`STRICT`/`ORDERED`/`ROWCOUNT`), `ignoreColumn()` (`table.column` or bare
+`column`), `ignoreTable()`, `caseSensitive()`.
+
+=== `JdbcConnectionSpec` / `@JdbcNamed`
+
+A named database is injected as a `JdbcConnectionSpec`:
+
+[source,java]
+----
+void test(@JdbcNamed("SRC") final JdbcConnectionSpec src) {
+    // H2: jdbcUrl() is the plain in-memory URL, hopJdbcUrl() the (wrapped) URL Hop connects through.
+    // Oracle: host(), port(), service() and schema() describe the container-side schema.
+    spec -> databaseTypeName(); // "H2" or "ORACLE" - the Hop DatabaseMeta type
+}
+----
+
+=== `BaseDatabaseExtension` (SPI)
+
+Implement this class (package `io.yupiik.hop.junit.database`) and register it in
+`META-INF/services/io.yupiik.hop.junit.database.BaseDatabaseExtension` to provide a new backend:
+
+* `name()` - matches `DatabaseImplementation.current()` (`"H2"`, `"ORACLE"`, ...);
+* `findDatabases(context)` - the ordered, de-duplicated descriptors the method declares;
+* `createDatabase(context, descriptor)` - open the physical database, return spec + connection;
+* `seedDataset(managed, inits)` / `verifyDataset(managed, expected)` - the dataset engine hooks;
+* optionally `beforeDatabases`, `resetDatabase`, `provisionAdmin` for backend-specific lifecycle.
+
+The base class implements the whole JUnit lifecycle (schema creation, seeding, verification after a
+passing test, close + reset) and the `@JdbcNamed` parameter resolution. The isolated Hop working
+tree per test is prepared by the `@HopPipeline` / `@HopWorkflow` extensions (`HopTestWorkDirectories`),
+not by the database backend, so the two responsibilities stay decoupled.
+
+== Configuration surface
+
+[cols="2,1,3", options="header"]
+|===
+|Property |Default |Description
+|`database.default.implementation` |`H2` |Which registered backend the `@Database` facade uses.
+|`database.default.h2.mode` |`ORACLE_EXTENDED` |H2 compatibility mode for `@Database` descriptors.
+|`oracle.image` |pinned digest |Testcontainers image for the Oracle backend. The key derives from
+the backend's simple class name minus `DatabaseExtension`, lowercased
+(`OracleDatabaseExtension` -> `oracle.image`), so any Testcontainers backend can be targeted.
+|`project.build.directory` |`target` |Base dir for the isolated Hop work tree. When set by the IDE
+(rather than Maven), pass it through surefire with `systemPropertyVariables` so
+`HopTestWorkDirectories` respects the configured build directory.
+|===

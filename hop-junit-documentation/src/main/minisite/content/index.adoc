@@ -1,0 +1,46 @@
+= Hop JUnit
+:minisite-left-menu-prefix:
+:minisite-breadcrumb: Home
+
+Hop JUnit is a JUnit 5 extension framework for testing Apache Hop pipelines and workflows, bundled
+with an engine-agnostic database facade: the same test seeds/verifies an in-memory H2 database by
+default, or a real Oracle 23ai Free Testcontainers container under a `-Poracle` Maven profile.
+
+It is built around plain, instantiable Java classes - no static utilities - a small
+`java.util.ServiceLoader`-based backend registry, and JUnit 5 native extensions.
+
+The site is organized as follows:
+
+* <<modules.adoc#,Modules>> - the artifacts and how they fit together.
+* <<quickstart.adoc#,Quickstart>> - get a pipeline/workflow test running with H2 in minutes.
+* <<coverage.adoc#,Coverage>> - Hop scope coverage for your pipelines and workflows.
+* <<api.adoc#,API>> - the reference for the main extensions, annotations and SPI.
+
+== At a glance
+
+* `hop-junit-database-api` - the dbunit-free, Hop-free engine SPI and contract types
+  (`@DbInit`, `@DbExpected`, `JdbcConnectionSpec`, ...).
+* `hop-junit-database-core` - the engine-agnostic `@Database` facade that selects the backend at
+  runtime through `ServiceLoader`.
+* `hop-junit-database-h2` - the default in-memory H2 backend, Oracle-compatible out of the box.
+* `hop-junit-database-testcontainers` - the shared Testcontainers lifecycle and DBUnit dataset engine.
+* `hop-junit-database-oracle` - the real Oracle backend (add it inside your own `-Poracle` profile).
+* `hop-junit-core` - the Hop fixtures (`@HopPipeline`, `@HopWorkflow`), parameter/connection wiring
+  and Hop scope coverage.
+* `hop-junit-documentation` - this documentation site.
+
+== Why an engine-agnostic facade?
+
+A pipeline written against Oracle SQL should test exactly the same SQL that runs in production.
+Hop JUnit lets you write one test body and flip between two backends with a single system property:
+
+* **H2** (`database.default.implementation=H2`, the default) - zero-dependency, in-memory, includes an
+  Oracle-compatible mode and a JDBC driver that rewrites Oracle SQL for H2.
+* **ORACLE** - a real Oracle 23ai Free Testcontainers container, with per-schema isolation.
+
+Choose H2 for fast local development and CI, then switch the same tests to real Oracle when you need
+the exact engine semantics.
+
+== Next
+
+Start with the <<modules.adoc#,Modules>> overview or jump straight to the <<quickstart.adoc#,Quickstart>>.

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.yupiik.hop.junit</groupId>
+    <artifactId>hop-junit-database-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>hop-junit-database-oracle</artifactId>
+  <name>Hop JUnit :: Database :: Oracle</name>
+  <description>The Oracle backend: real Oracle 23ai Free Testcontainers containers with per-schema isolation. The Oracle-specific dependencies are declared unconditionally; downstream consumers reference this module inside their own -Poracle Maven profile so H2 remains the default.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.yupiik.hop.junit</groupId>
+      <artifactId>hop-junit-database-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.yupiik.hop.junit</groupId>
+      <artifactId>hop-junit-database-testcontainers</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.yupiik.hop.junit</groupId>
+      <artifactId>hop-junit-database-dataset</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc11</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hop</groupId>
+      <artifactId>hop-databases-oracle</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-testkit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!--
+            These tests drive a real Oracle backend, so the shared DbUnit engine must pick the
+            OracleDataTypeFactory (DbUnitEngine.wrap() switches on DatabaseImplementation.current()).
+            That reads the JVM system property, which defaults to H2; without this override the
+            STRICT post-test dataset comparison would use the H2 datatype factory on an Oracle
+            connection.
+          -->
+          <systemPropertyVariables>
+            <database.default.implementation>ORACLE</database.default.implementation>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Opt out of the Oracle integration tests when Docker is not available: mvn ... -Pno-oracle-test -->
+    <profile>
+      <id>no-oracle-test</id>
+      <activation>
+        <property>
+          <name>no-oracle-test</name>
+        </property>
+      </activation>
+      <properties>
+        <skipTests>true</skipTests>
+      </properties>
+    </profile>
+  </profiles>
+</project>
