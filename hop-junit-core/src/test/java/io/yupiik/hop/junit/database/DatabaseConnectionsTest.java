@@ -66,6 +66,23 @@ class DatabaseConnectionsTest {
     }
 
     @Test
+    void parsesOracleShortFormUrlProducedByTestcontainers() throws Exception {
+        // Testcontainers OracleContainer#getJdbcUrl() emits the classic thin short form
+        // (single '@', no '//'), e.g. jdbc:oracle:thin:@localhost:32797/freepdb1.
+        final var spec = new JdbcConnectionSpec(
+                "src",
+                "APP",
+                "secret",
+                "jdbc:oracle:thin:@localhost:32797/freepdb1",
+                DatabaseImplementation.ORACLE,
+                "SRC");
+        final var meta = saved(connections, "src", spec);
+        assertEquals("localhost", meta.getHostname());
+        assertEquals("32797", meta.getPort());
+        assertEquals("/freepdb1", meta.getDatabaseName());
+    }
+
+    @Test
     void rejectsMalformedOracleUrl() {
         final var spec =
                 new JdbcConnectionSpec("bad", "u", "p", "jdbc:oracle:thin:@//", DatabaseImplementation.ORACLE, "BAD");

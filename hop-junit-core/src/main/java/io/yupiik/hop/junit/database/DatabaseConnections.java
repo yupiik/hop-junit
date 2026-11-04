@@ -27,7 +27,7 @@ import org.apache.hop.metadata.serializer.memory.MemoryMetadataProvider;
  */
 public class DatabaseConnections {
     private static final Pattern ORACLE_URL =
-            Pattern.compile("jdbc:oracle:thin:(?:@|@/)?//(?<host>[^/:]+)(?::(?<port>\\d+))?/(?<service>[^/]+)");
+            Pattern.compile("jdbc:oracle:thin:@?(?://)?(?<host>[^/:]+)(?::(?<port>\\d+))?/(?<service>[^/]+)");
 
     public DatabaseConnections() {
         // no-op
