@@ -63,17 +63,6 @@ To run the same tests against real Oracle, add `hop-junit-database-oracle` insid
 `-Poracle` profile and set `database.default.implementation=ORACLE` in that profile's surefire
 configuration. See the generated site (<<quickstart>>) for the complete profile snippet.
 
-== Design notes
-
-* **No reflection for engine selection** - the facade resolves backends through
-  `java.util.ServiceLoader` and compares `BaseDatabaseExtension.name()` with
-  `DatabaseImplementation.current()`.
-* **No static utilities** - the API is made of instantiable classes with instance methods
-  (`HopFixtureSupport`, `HopParametersSupport`, `DbUnitEngine`, `SqlScriptRunner`, ...). The only
-  statics left are JVM-wide singletons/state by design (`HopCoverageRuntime.INSTANCE`, the backend
-  registry) and H2 `CREATE ALIAS` targets.
-* **No package-private API** - types and members are private, protected (extension points) or public.
-
 == Java baseline
 
 Java 21 or later.

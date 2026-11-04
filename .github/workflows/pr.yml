@@ -1,0 +1,32 @@
+name: build-pr
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MAVEN_ARGS: -B -q -T1C -Daether.connector.basic.downstreamThreads=128
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      # composite action: checkout + JDK + maven cache + maven install (from Maven Central).
+      # Pinned to the PR head commit so the jobs build exactly what is under review.
+      - name: Setup Maven Action
+        uses: s4u/setup-maven-action@8da9a2ce045f6f610f43985a87a62f256e963374
+        with:
+          maven-version: '3.9.16'
+          java-version: '25'
+          java-distribution: temurin
+          checkout-fetch-depth: '0'
+          checkout-ref: ${{ github.event.pull_request.head.sha }}
+
+      # No need to populate origin/main: hop-junit does not enable spotless ratchetFrom.
+      - name: Build (incl. Oracle/Testcontainers tests)
+        run: mvn ${MAVEN_ARGS} verify
