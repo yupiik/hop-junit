@@ -33,8 +33,8 @@ class HopParametersSupportTest {
     @Target({TYPE, METHOD})
     @Retention(RUNTIME)
     @HopParameters({
-        @HopParameter(key = "sync.table", value = "CONTRACTS"),
-        @HopParameter(key = "sync.partition", value = "P20260915"),
+        @HopParameter(key = "sync.table", value = "ORDERS"),
+        @HopParameter(key = "sync.partition", value = "P20260101"),
     })
     @interface HopSyncParameters {}
 
@@ -153,14 +153,13 @@ class HopParametersSupportTest {
     @Test
     void resolvesSingleLevelAliasOnMethod() throws Exception {
         assertEquals(
-                Map.of("sync.table", "CONTRACTS", "sync.partition", "P20260915"),
-                paramsFor(MethodAlias.class, "method"));
+                Map.of("sync.table", "ORDERS", "sync.partition", "P20260101"), paramsFor(MethodAlias.class, "method"));
     }
 
     @Test
     void classLevelAliasAppliesToMethodsWithoutOwnBatch() throws Exception {
         assertEquals(
-                Map.of("sync.table", "CONTRACTS", "sync.partition", "P20260915"), paramsFor(ClassAlias.class, "plain"));
+                Map.of("sync.table", "ORDERS", "sync.partition", "P20260101"), paramsFor(ClassAlias.class, "plain"));
     }
 
     @Test

@@ -47,11 +47,23 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 public class H2DatabaseExtension extends BaseDatabaseExtension {
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^A-Za-z0-9_]");
 
-    private final H2SqlRewriteDriver rewriteDriver = new H2SqlRewriteDriver();
+    private final H2SqlRewriteDriver rewriteDriver = registeredRewriteDriver();
     private final DbUnitEngine engine = new DbUnitEngine();
 
-    static {
-        new H2SqlRewriteDriver();
+    /**
+     * Pick the {@link H2SqlRewriteDriver} the consumer registered with DriverManager (subclassing the
+     * driver and overriding the rewriter), falling back to the built-in driver when none is present.
+     */
+    private static H2SqlRewriteDriver registeredRewriteDriver() {
+        try {
+            final var driver = DriverManager.getDriver("jdbc:testoracleextended:h2:placeholder");
+            if (driver instanceof H2SqlRewriteDriver rewriteDriver) {
+                return rewriteDriver;
+            }
+        } catch (final SQLException ignored) {
+            // no registered rewrite driver - fall back to the built-in
+        }
+        return new H2SqlRewriteDriver();
     }
 
     @Override
@@ -101,7 +113,7 @@ public class H2DatabaseExtension extends BaseDatabaseExtension {
 
     /**
      * Registers every public static method of {@link H2OracleExtendedShims} as an H2 SQL alias, so
-     * the Oracle-emulation functions ({@code SYS_CONTEXT}, {@code ORA_HASH}, ...) resolve. H2's
+     * the Oracle-emulation functions resolve. H2's
      * {@code CREATE ALIAS ... FOR "class.method"} resolves them through reflection on the class
      * itself - a JDBC-mechanism requirement, not a framework static-utility API.
      */

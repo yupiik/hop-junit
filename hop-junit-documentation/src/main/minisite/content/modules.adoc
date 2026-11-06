@@ -32,10 +32,28 @@ The database testing framework is grouped under the `hop-junit-database-parent` 
 * `hop-junit-database-h2` - the H2 backend (`H2DatabaseExtension`, `@H2Database`), an in-memory
   Oracle-compatible H2 database and a JDBC driver (`H2SqlRewriteDriver`) that rewrites Oracle SQL
   for H2. Registered for the `H2` implementation.
+
+[NOTE]
+====
+To extend the built-in Oracle-to-H2 rewrites without changing this module, subclass
+`H2SqlRewriteDriver`, override the constructor-provided rewriter with your own, and register the
+subclass with `java.sql.DriverManager` (via `META-INF/services/java.sql.Driver` or an explicit
+`DriverManager.registerDriver` call in your own code). `H2DatabaseExtension` reuses the registered
+rewrite driver through `DriverManager` and falls back to the built-in driver when none is present.
+The private Oracle admin hook (`OracleAdminProvisioner`) lets consumers add owner-scoped
+provisioning (for example a `DBMS_CRYPTO` stand-in or per-schema grants and synonyms) from their own
+project, keeping the extension generic.
+====
+
+NOTE: Oracle compatibility is partial: H2 tables are not physically partitioned and the rewrite removes `PARTITION(...)`, so reads include the whole fixture table, not just the named partition.
+The H2 `_ROWID_` and `ORA_HASH` shim support repeatable reader bands for unchanged fixture rows but do not reproduce Oracle row identifiers or hash values.
+Whole-query application templates, Oracle dictionary XML extraction, and general hierarchical queries are not emulated by this driver.
+SHA-1 character input is encoded as UTF-8 for H2, which matches Oracle only when the Oracle database uses a compatible character encoding.
 * `hop-junit-database-oracle` - the Oracle backend (`OracleDatabaseExtension`, `@OracleDatabase`),
   backed by a real Oracle 23ai Free Testcontainers container with per-schema isolation. The Oracle
   dependencies are declared unconditionally; you reference this module inside your own `-Poracle`
-  profile.
+  profile. When admin-marked SQL scripts are declared, they run on the SYSTEM connection in
+  declaration order, followed by any registered `OracleAdminProvisioner`.
 
 == Hop execution and coverage
 

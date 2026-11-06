@@ -15,6 +15,8 @@
  */
 package io.yupiik.hop.junit.database.h2;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.regex.Pattern;
 
 /**
@@ -31,21 +33,41 @@ public class H2OracleExtendedShims {
         // no-op
     }
 
-    public static String SYS_CONTEXT(final String namespace, final String parameter) {
-        if ("USERENV".equalsIgnoreCase(namespace)
-                && ("CURRENT_SCHEMA".equalsIgnoreCase(parameter) || "SESSION_USER".equalsIgnoreCase(parameter))) {
-            return "SA";
+    /** Oracle SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'|'SESSION_USER'|'DB_NAME') using the real H2 connection state. */
+    public static String SYS_CONTEXT(final Connection connection, final String namespace, final String parameter)
+            throws SQLException {
+        if (!"USERENV".equalsIgnoreCase(namespace)) {
+            return null;
         }
-        return null;
+        final var name = parameter == null ? "" : parameter.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (name) {
+            case "CURRENT_SCHEMA", "SESSION_USER" -> scalar(connection, "SELECT SCHEMA()");
+            case "DB_NAME" -> scalar(connection, "SELECT DATABASE()");
+            default -> null;
+        };
+    }
+
+    private static String scalar(final Connection connection, final String sql) throws SQLException {
+        try (var statement = connection.createStatement();
+                final var result = statement.executeQuery(sql)) {
+            return result.next() ? result.getString(1) : null;
+        }
     }
 
     public static int ORA_HASH(final Object value) {
-        return value == null ? 0 : Math.abs(value.toString().hashCode());
+        return value == null ? 0 : value.toString().hashCode() & Integer.MAX_VALUE;
     }
 
     public static int ORA_HASH(final Object value, final int maxBucket) {
         final var hash = ORA_HASH(value);
-        return maxBucket <= 0 ? hash : hash % (maxBucket + 1);
+        if (maxBucket < 0) {
+            throw new IllegalArgumentException("ORA_HASH max bucket must be non-negative");
+        }
+        return (int) (hash % ((long) maxBucket + 1));
+    }
+
+    public static String TO_CLOB(final String value) {
+        return value;
     }
 
     public static long TO_NUMBER(final String value) {

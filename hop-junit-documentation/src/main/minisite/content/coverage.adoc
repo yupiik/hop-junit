@@ -42,7 +42,7 @@ All knobs are system properties, typically set from the surefire plugin:
 |`hop.coverage.siteDir` |`target/hop-coverage/report` |Where the rendered reports are written.
 |`hop.coverage.report.format` |`JSON,HTML,ADOC` |Comma-separated list of `JSON`, `HTML`, `ADOC`.
 |`hop.coverage.requiredCoverage` |unset |Global required coverage in percent (e.g. `80`).
-|`hop.coverage.requiredCoverage.<ARTIFACT>` |global value |Per-artifact override, e.g. `hop.coverage.requiredCoverage.T_ARCHIVE_LOAD=66.0` (artifact name without extension).
+|`hop.coverage.requiredCoverage.<ARTIFACT>` |global value |Per-artifact override, e.g. `hop.coverage.requiredCoverage.T_LOAD=66.0` (artifact name without extension).
 |`hop.coverage.failOnMalformedReport` |`true` |Fail the build when a raw report is malformed.
 |`hop.coverage.failOnWriteError` |`true` |Fail the build when a report cannot be written.
 |`hop.report.adoc.output` |`target/hop-coverage/report/coverage.adoc` |Where the ADOC report is written (include it in your own docs with `include::`).
@@ -63,7 +63,7 @@ test JVM:
       <hop.coverage.enabled>true</hop.coverage.enabled>
       <hop.coverage.basedir>${project.basedir}</hop.coverage.basedir>
       <hop.coverage.requiredCoverage>80</hop.coverage.requiredCoverage>
-      <hop.coverage.requiredCoverage.T_ARCHIVE_LOAD>66.0</hop.coverage.requiredCoverage.T_ARCHIVE_LOAD>
+      <hop.coverage.requiredCoverage.T_LOAD>66.0</hop.coverage.requiredCoverage.T_LOAD>
     </systemPropertyVariables>
   </configuration>
 </plugin>

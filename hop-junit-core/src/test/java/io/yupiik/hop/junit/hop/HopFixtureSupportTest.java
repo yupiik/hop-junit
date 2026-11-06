@@ -38,7 +38,7 @@ class HopFixtureSupportTest {
         result.setNrErrors(1);
         result.setLogText("Hop pipeline diagnostics" + System.lineSeparator()
                 + "artifact=T_BAD.hpl" + System.lineSeparator()
-                + "parameters={archive.table=CONTRACTS}" + System.lineSeparator()
+                + "parameters={archive.table=ORDERS}" + System.lineSeparator()
                 + "java.lang.IllegalStateException: boom");
 
         final var error = assertThrows(
@@ -48,7 +48,7 @@ class HopFixtureSupportTest {
 
         assertTrue(error.getMessage().contains("pipeline T_BAD.hpl"));
         assertTrue(error.getMessage().contains("artifact=T_BAD.hpl"));
-        assertTrue(error.getMessage().contains("parameters={archive.table=CONTRACTS}"));
+        assertTrue(error.getMessage().contains("parameters={archive.table=ORDERS}"));
         assertTrue(error.getMessage().contains("java.lang.IllegalStateException: boom"));
     }
 

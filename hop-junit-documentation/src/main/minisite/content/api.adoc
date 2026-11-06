@@ -34,9 +34,9 @@ The extension injects a `HopPipelineFixture` / `HopWorkflowFixture`:
 [source,java]
 ----
 @Test
-@HopPipeline(value = "archive/T_ARCHIVE_LOAD.hpl", projectHome = "src/test/resources")
+@HopPipeline(value = "load/T_LOAD.hpl", projectHome = "src/test/resources")
 void loads(final HopPipelineFixture pipeline) {
-    pipeline.with("archive.table", "CONTRACTS")
+    pipeline.with("load.table", "ORDERS")
             .withConnection("SRC_ORACLE", src)
             .execute()
             .assertSuccess()

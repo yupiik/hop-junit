@@ -16,6 +16,7 @@
 package io.yupiik.hop.junit.database.h2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,15 +59,15 @@ class OracleToH2SqlRewriterTest {
     }
 
     @Test
-    void dbmsCryptoHashSh1IsStripped() {
+    void dbmsCryptoHashSh1UsesH2Sha1() {
         final var sql = "SELECT DBMS_CRYPTO.HASH(payload, 4) FROM SA.T";
-        assertEquals("SELECT payload FROM SA.T", rewriter.apply(sql));
+        assertEquals("SELECT HASH('SHA-1', payload) FROM SA.T", rewriter.apply(sql));
     }
 
     @Test
-    void dbmsCryptoHashNamedConstantIsStripped() {
+    void dbmsCryptoHashNamedConstantUsesH2Sha1() {
         final var sql = "SELECT DBMS_CRYPTO.HASH(payload, DBMS_CRYPTO.HASH_SH1) FROM SA.T";
-        assertEquals("SELECT payload FROM SA.T", rewriter.apply(sql));
+        assertEquals("SELECT HASH('SHA-1', payload) FROM SA.T", rewriter.apply(sql));
     }
 
     @Test
@@ -96,6 +97,34 @@ class OracleToH2SqlRewriterTest {
     void sysdateMinusRetentionIsConvertedToDateAdd() {
         final var sql = "TRUNC(SYSDATE) - CASE WHEN REGEXP_LIKE(TRIM('-30'), '^-?[0-9]+$') "
                 + "THEN TO_NUMBER(TRIM('-30')) ELSE 0 END";
-        assertEquals("DATEADD('DAY', -30, CURRENT_DATE)", rewriter.apply(sql));
+        assertEquals(
+                "DATEADD('DAY', -(CASE WHEN REGEXP_LIKE(TRIM('-30'), '^-?[0-9]+$') "
+                        + "THEN TO_NUMBER(TRIM('-30')) ELSE 0 END), CURRENT_DATE)",
+                rewriter.apply(sql));
+    }
+
+    @Test
+    void rowidToCharRowidIsReplacedForHashBandSplit() {
+        final var sql = "SELECT /*+ FULL(t) PARALLEL(t,4) */ SYSTEM_ID "
+                + "FROM ORDERS PARTITION(\"P20260101\") t "
+                + "WHERE MOD(ORA_HASH(ROWIDTOCHAR(t.ROWID)), 4) = 1";
+        final var rewritten = rewriter.apply(sql);
+        assertTrue(rewritten.contains("CAST(t._ROWID_ AS VARCHAR)"), () -> rewritten);
+        assertFalse(rewritten.contains("ROWIDTOCHAR"), () -> rewritten);
+        assertFalse(rewritten.contains("PARTITION("), () -> rewritten);
+        assertTrue(rewritten.contains("FROM ORDERS t"), () -> rewritten);
+    }
+
+    @Test
+    void plainSqlWithoutRowidConstructIsUnchanged() {
+        final var sql = "SELECT ID FROM SA.CUSTOMER WHERE ID > 0";
+        assertSame(sql, rewriter.apply(sql));
+    }
+
+    @Test
+    void oracleAlternativeQuotedLiteralsAreNotRewritten() {
+        final var sql = "SELECT q'[don't rewrite ROWIDTOCHAR(t.ROWID) FROM T PARTITION(P)]', "
+                + "Q'{don't rewrite DBMS_CRYPTO.HASH(x,4)}' FROM dual";
+        assertSame(sql, rewriter.apply(sql));
     }
 }
