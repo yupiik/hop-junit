@@ -36,13 +36,9 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
     private static final Pattern HASH = Pattern.compile("(?i)\\bDBMS_CRYPTO\\s*\\.\\s*HASH\\s*\\(");
     private static final Pattern RAWTOHEX = Pattern.compile("(?i)\\bRAWTOHEX\\s*\\(");
     private static final Pattern CAST_TO_RAW = Pattern.compile("(?i)\\bUTL_RAW\\s*\\.\\s*CAST_TO_RAW\\s*\\(");
-    private static final Pattern TRANCHE = Pattern.compile(
-            "(?i)\\bSELECT\\s+LEVEL\\s*-\\s*1\\s+AS\\s+tranche_id\\s+FROM\\s+dual\\s+CONNECT\\s+BY\\s+LEVEL\\s*<=\\s*4\\b");
-    private static final Pattern XML_AGGREGATION = Pattern.compile(
-            "(?i)\\bRTRIM\\s*\\(\\s*XMLCAST\\s*\\(\\s*XMLAGG\\s*\\(\\s*XMLELEMENT\\s*\\(\\s*e\\s*,\\s*([A-Z_][A-Z0-9_$#]*)\\s*\\|\\|\\s*','\\s*\\)\\s*ORDER\\s+BY\\s+([A-Z_][A-Z0-9_$#]*)\\s*\\)\\s+AS\\s+CLOB\\s*\\)\\s*,\\s*','\\s*\\)");
-    private static final Pattern RETENTION = Pattern.compile(
-            "(?i)\\bTRUNC\\s*\\(\\s*SYSDATE\\s*\\)\\s*-\\s*(CASE\\s+WHEN\\s+REGEXP_LIKE\\s*\\(\\s*TRIM\\s*\\(\\s*(?:'(?:''|[^'])*'|\\?)\\s*\\)\\s*,\\s*'\\^-\\?\\[0-9]\\+\\$'\\s*\\)\\s+THEN\\s+TO_NUMBER\\s*\\(\\s*TRIM\\s*\\(\\s*(?:'(?:''|[^'])*'|\\?)\\s*\\)\\s*\\)\\s+ELSE\\s+0\\s+END)");
-    private static final Pattern TEST_SCHEMA = Pattern.compile("\"SA\"\\.");
+    private static final OracleDateArithmetic DATE_ARITHMETIC_REWRITER = new OracleDateArithmetic();
+    private static final OracleHierarchyRewriter HIERARCHY_REWRITER = new OracleHierarchyRewriter();
+    private static final OracleXmlAggregationRewriter XML_AGGREGATION_REWRITER = new OracleXmlAggregationRewriter();
 
     public OracleToH2SqlRewriter() {
         // no-op
@@ -55,12 +51,12 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
             return sql;
         }
         final var upper = codeOnly(sql).toUpperCase(Locale.ROOT);
-        var rewritten = sql;
+        var rewritten = DATE_ARITHMETIC_REWRITER.rewrite(sql);
         if (upper.contains("UTL_RAW")) {
             rewritten = replaceCode(rewritten, CAST_TO_RAW, matcher -> "STRINGTOUTF8(");
         }
         if (upper.contains("XMLAGG")) {
-            rewritten = rewriteXmlAggregation(rewritten);
+            rewritten = XML_AGGREGATION_REWRITER.rewrite(rewritten);
         }
         if (upper.contains("DBMS_CRYPTO")) {
             rewritten = rewriteDbmsCryptoHash(rewritten);
@@ -69,10 +65,7 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
             rewritten = rewriteRawToHex(rewritten);
         }
         if (upper.contains("CONNECT")) {
-            rewritten = rewriteFourTranches(rewritten);
-        }
-        if (upper.contains("SYSDATE") && upper.contains("REGEXP_LIKE")) {
-            rewritten = rewriteSysdateMinusRetention(rewritten);
+            rewritten = HIERARCHY_REWRITER.rewrite(rewritten);
         }
         if (upper.contains("PARTITION")) {
             rewritten = rewritePartitionClauses(rewritten);
@@ -80,22 +73,7 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
         if (upper.contains("ROWIDTOCHAR")) {
             rewritten = rewriteRowIdToChar(rewritten);
         }
-        return replaceCode(rewritten, TEST_SCHEMA, matcher -> "");
-    }
-
-    private String rewriteXmlAggregation(final String sql) {
-        return replaceCode(
-                sql,
-                XML_AGGREGATION,
-                matcher -> "LISTAGG(" + matcher.group(1) + ", ',') WITHIN GROUP (ORDER BY " + matcher.group(2) + ")");
-    }
-
-    private String rewriteFourTranches(final String sql) {
-        return replaceCode(
-                sql,
-                TRANCHE,
-                matcher ->
-                        "SELECT 0 AS tranche_id FROM dual UNION ALL SELECT 1 FROM dual UNION ALL SELECT 2 FROM dual UNION ALL SELECT 3 FROM dual");
+        return rewritten;
     }
 
     private String rewriteDbmsCryptoHash(final String sql) {
@@ -121,11 +99,16 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
                 break;
             }
             final var algorithm = code.substring(comma + 1, end - 1).replaceAll("\\s+", "");
-            if (!"4".equals(algorithm) && !"DBMS_CRYPTO.HASH_SH1".equalsIgnoreCase(algorithm)) {
+            final var digest = "3".equals(algorithm) || "DBMS_CRYPTO.HASH_SH1".equalsIgnoreCase(algorithm)
+                    ? "SHA-1"
+                    : "4".equals(algorithm) ? "SHA-256" : null;
+            if (digest == null) {
                 out.append(sql, last, end);
             } else {
                 out.append(sql, last, matcher.start())
-                        .append("HASH('SHA-1', ")
+                        .append("HASH('")
+                        .append(digest)
+                        .append("', ")
                         .append(sql, matcher.end(), comma)
                         .append(')');
             }
@@ -161,11 +144,22 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
         return last == 0 ? sql : out.append(sql, last, sql.length()).toString();
     }
 
-    private String rewriteSysdateMinusRetention(final String sql) {
-        return replaceCode(sql, RETENTION, matcher -> "DATEADD('DAY', -(" + matcher.group(1) + "), CURRENT_DATE)");
-    }
-
     private String rewritePartitionClauses(final String sql) {
+        final var tokens = OracleSql.tokens(sql);
+        final var partitioned = java.util.stream.IntStream.range(0, Math.max(0, tokens.size() - 1))
+                .anyMatch(
+                        i -> tokens.get(i).is("PARTITION") && tokens.get(i + 1).is("("));
+        if (partitioned
+                && tokens.stream()
+                        .anyMatch(t -> t.is("INSERT")
+                                || t.is("UPDATE")
+                                || t.is("DELETE")
+                                || t.is("MERGE")
+                                || t.is("ALTER")
+                                || t.is("TRUNCATE"))) {
+            throw new IllegalArgumentException(
+                    "Partition-targeted writes cannot be approximated on unpartitioned H2 fixtures");
+        }
         final var withAlias = replaceCode(
                 sql,
                 PARTITION_WITH_ALIAS,

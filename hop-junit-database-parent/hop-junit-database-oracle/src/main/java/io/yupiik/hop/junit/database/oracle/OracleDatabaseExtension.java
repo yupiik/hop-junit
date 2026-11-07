@@ -17,11 +17,14 @@ package io.yupiik.hop.junit.database.oracle;
 
 import static java.util.stream.Collectors.toMap;
 
+import io.yupiik.hop.junit.database.DatabaseImplementation;
 import io.yupiik.hop.junit.database.DbExpected;
 import io.yupiik.hop.junit.database.DbInit;
+import io.yupiik.hop.junit.database.JdbcConnectionSpec;
 import io.yupiik.hop.junit.database.dataset.DbUnitEngine;
 import io.yupiik.hop.junit.database.dataset.SqlScriptRunner;
 import io.yupiik.hop.junit.database.testcontainers.TestContainerDatabaseExtension;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -62,6 +65,84 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
 
     private static volatile JdbcDatabaseContainer<?> shared;
 
+    private static final ExtensionContext.Namespace LIFECYCLE =
+            ExtensionContext.Namespace.create(OracleDatabaseExtension.class, "lifecycle");
+
+    @Override
+    protected void beforeDatabases(final ExtensionContext context) {
+        try {
+            // Reserve cleanup access before test code can exhaust the listener's process slots.
+            context.getStore(LIFECYCLE).put(context.getUniqueId(), new OracleLifecycle(adminConnection(container())));
+        } catch (final SQLException se) {
+            throw new IllegalStateException("Unable to open Oracle lifecycle connection", se);
+        }
+    }
+
+    private OracleLifecycle lifecycle(final ExtensionContext context) {
+        return context.getStore(LIFECYCLE).get(context.getUniqueId(), OracleLifecycle.class);
+    }
+
+    @Override
+    protected ManagedDatabase createDatabase(final ExtensionContext context, final Descriptor descriptor)
+            throws Exception {
+        final var lifecycle = lifecycle(context);
+        final var schema = descriptor.name().toUpperCase(Locale.ROOT);
+        // Track even failed CREATE/GRANT/connect operations for store-close cleanup.
+        lifecycle.schemas.add(schema);
+        dropUserTolerate(lifecycle.admin, schema);
+        createSchema(lifecycle.admin, schema);
+        final var jdbcUrl = container().getJdbcUrl();
+        final var connection = DriverManager.getConnection(jdbcUrl, schema, SCHEMA_PASSWORD);
+        try {
+            try (final var statement = connection.createStatement()) {
+                statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + schema);
+            }
+            return new ManagedDatabase(
+                    new JdbcConnectionSpec(
+                            descriptor.name(), schema, SCHEMA_PASSWORD, jdbcUrl, DatabaseImplementation.ORACLE, schema),
+                    connection,
+                    descriptor.expected());
+        } catch (final Exception failure) {
+            try {
+                connection.close();
+            } catch (final SQLException closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
+            throw failure;
+        }
+    }
+
+    private final class OracleLifecycle implements AutoCloseable {
+        private final Connection admin;
+        private final LinkedHashSet<String> schemas = new LinkedHashSet<>();
+
+        private OracleLifecycle(final Connection admin) {
+            this.admin = admin;
+        }
+
+        @Override
+        public void close() throws SQLException {
+            // Also runs when beforeEach failed before returning a ManagedDatabase.
+            try (admin) {
+                SQLException failure = null;
+                for (final var schema : schemas) {
+                    try {
+                        dropUserTolerate(admin, schema);
+                    } catch (final SQLException se) {
+                        if (failure == null) {
+                            failure = se;
+                        } else {
+                            failure.addSuppressed(se);
+                        }
+                    }
+                }
+                if (failure != null) {
+                    throw failure;
+                }
+            }
+        }
+    }
+
     @Override
     public String name() {
         return "ORACLE";
@@ -97,7 +178,113 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
                 .withPassword(APP_PASSWORD)
                 .withStartupTimeout(Duration.ofMinutes(10));
         container.start();
+        try {
+            initializeCapacity(container);
+            initializeCryptoGrant(container);
+            awaitReady(container);
+        } catch (final RuntimeException failure) {
+            try {
+                container.stop();
+            } catch (final RuntimeException stopFailure) {
+                failure.addSuppressed(stopFailure);
+            }
+            throw failure;
+        }
         return container;
+    }
+
+    private void initializeCapacity(final OracleContainer container) {
+        // The pinned image uses 200 processes, about 80 of which are Oracle's own.
+        // Dedicated clients need headroom while disconnected server processes are reaped.
+        final var output = executeSysSql(container, """
+                SET SERVEROUTPUT ON
+                DECLARE
+                  process_limit NUMBER;
+                BEGIN
+                  SELECT TO_NUMBER(value) INTO process_limit FROM v$parameter WHERE name = 'processes';
+                  IF process_limit < 500 THEN
+                    EXECUTE IMMEDIATE 'ALTER SYSTEM SET processes = 500 SCOPE = SPFILE';
+                    DBMS_OUTPUT.PUT_LINE('HOP_RESTART_REQUIRED');
+                  END IF;
+                END;
+                /
+                """);
+        if (output.contains("HOP_RESTART_REQUIRED")) {
+            executeSysSql(container, "SHUTDOWN IMMEDIATE;\nSTARTUP;\n");
+        }
+        executeSysSql(container, "ALTER SYSTEM REGISTER;\n");
+    }
+
+    private String executeSysSql(final OracleContainer container, final String sql) {
+        try {
+            final var result = container.execInContainer("sh", "-c", """
+                    sqlplus -s / as sysdba <<'SQL'
+                    WHENEVER OSERROR EXIT FAILURE
+                    WHENEVER SQLERROR EXIT FAILURE
+                    %s
+                    EXIT SUCCESS
+                    SQL
+                    """.formatted(sql));
+            if (result.getExitCode() != 0) {
+                throw new IllegalStateException(
+                        "Unable to initialize Oracle capacity: " + result.getStdout() + result.getStderr());
+            }
+            return result.getStdout();
+        } catch (final IOException ioe) {
+            throw new IllegalStateException("Unable to initialize Oracle capacity", ioe);
+        } catch (final InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted initializing Oracle capacity", ie);
+        }
+    }
+
+    private void awaitReady(final OracleContainer container) {
+        final var deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        SQLException failure;
+        do {
+            try (final var connection = adminConnection(container);
+                    final var statement = connection.createStatement();
+                    final var rows = statement.executeQuery("SELECT 1 FROM dual")) {
+                if (rows.next() && rows.getInt(1) == 1) {
+                    return;
+                }
+                throw new SQLException("Oracle readiness query returned no result");
+            } catch (final SQLException se) {
+                failure = se;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (final InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted waiting for Oracle readiness", ie);
+            }
+        } while (System.nanoTime() < deadline);
+        throw new IllegalStateException("Oracle PDB did not become ready", failure);
+    }
+
+    private void initializeCryptoGrant(final OracleContainer container) {
+        try {
+            // SYSTEM cannot grant access to SYS packages without an explicit grant option.
+            // Bootstrap once as SYS in the PDB, before publishing the shared container.
+            final var result = container.execInContainer("sh", "-c", """
+                    sqlplus -s / as sysdba <<'SQL'
+                    WHENEVER OSERROR EXIT FAILURE
+                    WHENEVER SQLERROR EXIT FAILURE
+                    ALTER SESSION SET CONTAINER = FREEPDB1;
+                    GRANT EXECUTE ON SYS.DBMS_CRYPTO TO SYSTEM WITH GRANT OPTION;
+                    EXIT SUCCESS
+                    SQL
+                    """);
+            if (result.getExitCode() != 0) {
+                throw new IllegalStateException(
+                        "Unable to initialize Oracle DBMS_CRYPTO grant: " + result.getStdout() + result.getStderr());
+            }
+        } catch (final IOException ioe) {
+            throw new IllegalStateException("Unable to initialize Oracle DBMS_CRYPTO grant", ioe);
+        } catch (final InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted initializing Oracle DBMS_CRYPTO grant", ie);
+        }
     }
 
     @Override
@@ -143,6 +330,7 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
             statement.execute("GRANT CONNECT, RESOURCE TO " + schema);
             statement.execute("ALTER USER " + schema + " QUOTA UNLIMITED ON USERS");
             statement.execute("GRANT CREATE VIEW TO " + schema);
+            statement.execute("GRANT EXECUTE ON SYS.DBMS_CRYPTO TO " + schema);
         }
     }
 
@@ -158,15 +346,14 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
         if (admin.length == 0) {
             return;
         }
-        try (var connection = adminConnection(container())) {
-            for (final var script : distinctAdminScripts(admin)) {
-                if (script.value().toLowerCase(Locale.ROOT).endsWith(".sql")) {
-                    new SqlScriptRunner().executeInitScripts(connection, new String[] {script.value()});
-                }
+        final var connection = lifecycle(context).admin;
+        for (final var script : distinctAdminScripts(admin)) {
+            if (script.value().toLowerCase(Locale.ROOT).endsWith(".sql")) {
+                new SqlScriptRunner().executeInitScripts(connection, new String[] {script.value()});
             }
-            for (final var provisioner : ServiceLoader.load(OracleAdminProvisioner.class)) {
-                provisioner.provision(connection, specs);
-            }
+        }
+        for (final var provisioner : ServiceLoader.load(OracleAdminProvisioner.class)) {
+            provisioner.provision(connection, specs);
         }
     }
 
@@ -189,14 +376,22 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
 
     @Override
     protected void resetDatabase(final ExtensionContext context, final ManagedDatabase managed) throws Exception {
-        try (Connection admin = adminConnection(container())) {
-            // Drop the descriptor schema for isolation.
-            dropUserTolerate(admin, managed.spec().schema());
-        }
+        final var lifecycle = lifecycle(context);
+        dropUserTolerate(lifecycle.admin, managed.spec().schema());
+        lifecycle.schemas.remove(managed.spec().schema());
     }
 
     /** Drop a schema and ignore "user does not exist" so first-run provisioning is tolerant. */
     private void dropUserTolerate(final Connection admin, final String schema) throws SQLException {
+        try (final var statement = admin.createStatement()) {
+            // Prevent pools or still-stopping Hop workers from reconnecting during teardown.
+            statement.execute("ALTER USER " + schema + " ACCOUNT LOCK");
+        } catch (final SQLException se) {
+            if (se.getErrorCode() == 1918) {
+                return;
+            }
+            throw se;
+        }
         killSessions(admin, schema);
         var lastSe = (java.sql.SQLException) null;
         try (var statement = admin.createStatement()) {
@@ -225,8 +420,7 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
         }
         if (lastSe != null && lastSe.getErrorCode() == 1940) {
             // Give up loudly instead of silently leaking the user into the next test.
-            throw new IllegalStateException(
-                    "Unable to drop Oracle schema " + schema + " after severing its sessions", lastSe);
+            throw new SQLException("Unable to drop Oracle schema " + schema + " after severing its sessions", lastSe);
         }
     }
 
@@ -237,14 +431,11 @@ public class OracleDatabaseExtension extends TestContainerDatabaseExtension<Orac
                     + "FOR s IN (SELECT sid, serial# FROM v$session WHERE username = UPPER('" + schema + "')) LOOP "
                     + "  BEGIN "
                     + "    EXECUTE IMMEDIATE 'ALTER SYSTEM DISCONNECT SESSION ''' || s.sid || ',' || s.serial# || ''' IMMEDIATE'; "
-                    + "  EXCEPTION WHEN OTHERS THEN NULL; "
+                    + "  EXCEPTION WHEN OTHERS THEN "
+                    + "    IF SQLCODE NOT IN (-30, -31) THEN RAISE; END IF; "
                     + "  END; "
                     + "END LOOP; "
                     + "END;");
-        } catch (final SQLException se) {
-            if (se.getErrorCode() != 1920) { // ORA-01920 (or user not found) - tolerate
-                throw se;
-            }
         }
     }
 }

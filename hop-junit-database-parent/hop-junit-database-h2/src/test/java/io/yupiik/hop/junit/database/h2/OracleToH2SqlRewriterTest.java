@@ -25,6 +25,20 @@ import io.yupiik.hop.junit.database.h2.driver.OracleToH2SqlRewriter;
 import org.junit.jupiter.api.Test;
 
 class OracleToH2SqlRewriterTest {
+    @Test
+    void partitionTargetedWritesAreNeverBroadened() {
+        for (final var sql : new String[] {
+            "DELETE FROM orders PARTITION (p1)",
+            "UPDATE orders PARTITION(p1) SET id=2",
+            "INSERT INTO orders PARTITION(p1) VALUES(1)",
+            "TRUNCATE TABLE orders PARTITION(p1)"
+        }) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> rewriter.apply(sql));
+        }
+        assertEquals(
+                "SELECT 'DELETE PARTITION(p1)' FROM dual", rewriter.apply("SELECT 'DELETE PARTITION(p1)' FROM dual"));
+    }
+
     private final OracleToH2SqlRewriter rewriter = new OracleToH2SqlRewriter();
 
     @Test
@@ -60,8 +74,20 @@ class OracleToH2SqlRewriterTest {
 
     @Test
     void dbmsCryptoHashSh1UsesH2Sha1() {
-        final var sql = "SELECT DBMS_CRYPTO.HASH(payload, 4) FROM SA.T";
+        final var sql = "SELECT DBMS_CRYPTO.HASH(payload, 3) FROM SA.T";
         assertEquals("SELECT HASH('SHA-1', payload) FROM SA.T", rewriter.apply(sql));
+    }
+
+    @Test
+    void dbmsCryptoHashSh256UsesH2Sha256() {
+        final var sql = "SELECT DBMS_CRYPTO.HASH(payload, 4) FROM SA.T";
+        assertEquals("SELECT HASH('SHA-256', payload) FROM SA.T", rewriter.apply(sql));
+    }
+
+    @Test
+    void unsupportedDbmsCryptoHashAlgorithmIsPreserved() {
+        final var sql = "SELECT DBMS_CRYPTO.HASH(payload, 99) FROM SA.T";
+        assertEquals(sql, rewriter.apply(sql));
     }
 
     @Test
@@ -71,17 +97,14 @@ class OracleToH2SqlRewriterTest {
     }
 
     @Test
-    void knownTestSchemaPrefixIsStripped() {
-        assertEquals("SELECT * FROM CUSTOMER", rewriter.apply("SELECT * FROM \"SA\".CUSTOMER"));
+    void quotedSchemaPrefixIsPreserved() {
+        assertEquals("SELECT * FROM \"SA\".CUSTOMER", rewriter.apply("SELECT * FROM \"SA\".CUSTOMER"));
     }
 
     @Test
     void connectByFourTranchesIsExpanded() {
         final var sql = "SELECT LEVEL - 1 AS tranche_id\n  FROM dual\n  CONNECT BY LEVEL <= 4";
-        assertEquals(
-                "SELECT 0 AS tranche_id FROM dual UNION ALL SELECT 1 FROM dual"
-                        + " UNION ALL SELECT 2 FROM dual UNION ALL SELECT 3 FROM dual",
-                rewriter.apply(sql));
+        assertTrue(rewriter.apply(sql).contains("WITH RECURSIVE"));
     }
 
     @Test
@@ -89,18 +112,29 @@ class OracleToH2SqlRewriterTest {
         final var sql = "SELECT RTRIM(XMLCAST(XMLAGG(XMLELEMENT(e, quoted_column || ',') "
                 + "ORDER BY column_id) AS CLOB), ',') AS columns FROM SA.T";
         final var rewritten = rewriter.apply(sql);
-        assertTrue(
-                rewritten.contains("LISTAGG(quoted_column, ',') WITHIN GROUP (ORDER BY column_id)"), () -> rewritten);
+        assertTrue(rewritten.contains("LISTAGG(quoted_column || ','"), () -> rewritten);
     }
 
     @Test
-    void sysdateMinusRetentionIsConvertedToDateAdd() {
-        final var sql = "TRUNC(SYSDATE) - CASE WHEN REGEXP_LIKE(TRIM('-30'), '^-?[0-9]+$') "
-                + "THEN TO_NUMBER(TRIM('-30')) ELSE 0 END";
+    void dateMinusNumericCaseUsesGenericDayArithmetic() {
+        final var sql = "DATE '2042-07-19' - CASE mode WHEN 'fast' THEN 2 ELSE TO_NUMBER('5') END";
         assertEquals(
-                "DATEADD('DAY', -(CASE WHEN REGEXP_LIKE(TRIM('-30'), '^-?[0-9]+$') "
-                        + "THEN TO_NUMBER(TRIM('-30')) ELSE 0 END), CURRENT_DATE)",
+                "(CAST(DATE '2042-07-19'  AS TIMESTAMP) - (INTERVAL '1 00:00:00' DAY TO SECOND * CAST(("
+                        + "CASE mode WHEN 'fast' THEN 2 ELSE TO_NUMBER('5') END) AS NUMERIC(38, 10))))",
                 rewriter.apply(sql));
+    }
+
+    @Test
+    void unknownOrMixedCaseResultsAreNotAssumedNumeric() {
+        for (final var operand : new String[] {
+            "CASE WHEN flag = 1 THEN delay ELSE 0 END",
+            "CASE WHEN flag = 1 THEN 3 ELSE DATE '2042-07-19' END",
+            "(CASE WHEN flag = 1 THEN '3' ELSE 0 END)",
+            "CASE WHEN flag = 1 THEN 3 ELSE CASE WHEN flag = 2 THEN other_delay ELSE 0 END END"
+        }) {
+            final var sql = "SELECT DATE '2042-07-19' - " + operand + " FROM measures";
+            assertEquals(sql, rewriter.apply(sql));
+        }
     }
 
     @Test

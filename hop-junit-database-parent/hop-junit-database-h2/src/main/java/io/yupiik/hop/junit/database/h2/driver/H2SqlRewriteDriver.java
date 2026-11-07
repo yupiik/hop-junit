@@ -20,6 +20,7 @@ import static java.util.logging.Logger.getLogger;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -42,7 +43,7 @@ import org.h2.engine.Constants;
  *
  * <p>The constructor taking a custom function enables to extend this driver easily.
  */
-public final class H2SqlRewriteDriver implements Driver {
+public class H2SqlRewriteDriver implements Driver {
     static {
         try {
             DriverManager.registerDriver(new H2SqlRewriteDriver());
@@ -94,6 +95,19 @@ public final class H2SqlRewriteDriver implements Driver {
         if (!acceptsURL(url)) {
             return null;
         }
+        if (getClass() == H2SqlRewriteDriver.class) {
+            final var custom = DriverManager.drivers()
+                    .filter(H2SqlRewriteDriver.class::isInstance)
+                    .map(H2SqlRewriteDriver.class::cast)
+                    .filter(it -> it.getClass() != H2SqlRewriteDriver.class && it.acceptsURL(url))
+                    .toList();
+            if (custom.size() > 1) {
+                throw new SQLException("Multiple custom Oracle-to-H2 JDBC drivers registered", "08001");
+            }
+            if (!custom.isEmpty()) {
+                return custom.getFirst().connect(url, info);
+            }
+        }
         final var connection = DriverManager.getConnection(unwrap(url), info);
         return proxy(Connection.class, connection, (proxy, method, args) -> {
             final var name = method.getName();
@@ -104,25 +118,8 @@ public final class H2SqlRewriteDriver implements Driver {
                 args[0] = rewriter.apply(sql);
             }
             final var result = method.invoke(connection, args);
-            if (result instanceof PreparedStatement preparedStatement) {
-                return proxy(
-                        PreparedStatement.class, preparedStatement, (preparedProxy, preparedMethod, preparedArgs) -> {
-                            if (preparedArgs != null
-                                    && preparedArgs.length > 0
-                                    && preparedArgs[0] instanceof String sql) {
-                                switch (preparedMethod.getName()) {
-                                    case "execute", "executeQuery", "executeUpdate", "executeLargeUpdate", "addBatch" ->
-                                        preparedArgs[0] = rewriter.apply(sql);
-                                    default -> {
-                                        // no-op
-                                    }
-                                }
-                            }
-                            return preparedMethod.invoke(preparedStatement, preparedArgs);
-                        });
-            }
             if (result instanceof Statement statement) {
-                return statementProxy(statement);
+                return statementProxy(statement, (Connection) proxy);
             }
             return result;
         });
@@ -159,8 +156,14 @@ public final class H2SqlRewriteDriver implements Driver {
         return getLogger(H2SqlRewriteDriver.class.getName());
     }
 
-    private Statement statementProxy(final Statement statement) {
-        return proxy(Statement.class, statement, (proxy, method, args) -> {
+    private Statement statementProxy(final Statement statement, final Connection connection) {
+        final Class<? extends Statement> type = statement instanceof CallableStatement
+                ? CallableStatement.class
+                : statement instanceof PreparedStatement ? PreparedStatement.class : Statement.class;
+        return proxy(type, statement, (proxy, method, args) -> {
+            if ("getConnection".equals(method.getName())) {
+                return connection;
+            }
             if (args != null && args.length > 0 && args[0] instanceof String sql) {
                 switch (method.getName()) {
                     case "execute", "executeQuery", "executeUpdate", "executeLargeUpdate", "addBatch" ->
@@ -175,10 +178,21 @@ public final class H2SqlRewriteDriver implements Driver {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> T proxy(final Class<T> type, final T delegate, final InvocationHandler handler) {
+    private static <T> T proxy(final Class<? extends T> type, final T delegate, final InvocationHandler handler) {
         return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (proxy, method, args) -> {
             if (method.getDeclaringClass() == Object.class) {
-                return method.invoke(delegate, args);
+                return switch (method.getName()) {
+                    case "equals" -> proxy == args[0];
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "toString" -> "H2SqlRewrite[" + delegate + "]";
+                    default -> throw new UnsupportedOperationException(method.getName());
+                };
+            }
+            if (("unwrap".equals(method.getName()) || "isWrapperFor".equals(method.getName()))
+                    && args != null
+                    && args[0] instanceof Class<?> requested
+                    && requested.isInstance(proxy)) {
+                return "unwrap".equals(method.getName()) ? proxy : true;
             }
             try {
                 return handler.invoke(proxy, method, args == null ? null : args.clone());

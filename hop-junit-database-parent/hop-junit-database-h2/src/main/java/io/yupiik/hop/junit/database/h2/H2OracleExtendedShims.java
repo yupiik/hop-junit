@@ -41,7 +41,8 @@ public class H2OracleExtendedShims {
         }
         final var name = parameter == null ? "" : parameter.trim().toUpperCase(java.util.Locale.ROOT);
         return switch (name) {
-            case "CURRENT_SCHEMA", "SESSION_USER" -> scalar(connection, "SELECT SCHEMA()");
+            case "CURRENT_SCHEMA" -> scalar(connection, "SELECT SCHEMA()");
+            case "SESSION_USER" -> scalar(connection, "SELECT SESSION_USER");
             case "DB_NAME" -> scalar(connection, "SELECT DATABASE()");
             default -> null;
         };
@@ -111,17 +112,5 @@ public class H2OracleExtendedShims {
 
     public static Object NVL2(final Object value, final Object ifNotNull, final Object ifNull) {
         return value == null ? ifNull : ifNotNull;
-    }
-
-    public static String RAWTOHEX(final Object value) {
-        if (value == null) {
-            return null;
-        }
-        final var text = value.toString();
-        final var hex = new StringBuilder(text.length() * 2);
-        for (final var c : text.toCharArray()) {
-            hex.append(String.format("%02X", (int) c));
-        }
-        return hex.toString();
     }
 }

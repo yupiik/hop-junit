@@ -28,6 +28,7 @@ import io.yupiik.hop.junit.database.JdbcNamed;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -39,6 +40,71 @@ import org.junit.jupiter.api.extension.ExtendWith;
  */
 @ExtendWith(OracleDatabaseExtension.class)
 class OracleDatabaseExtensionTest {
+    @Test
+    @OracleDatabase(name = "CAPACITY")
+    void acceptsBurstsOfDedicatedClients(@JdbcNamed("CAPACITY") final JdbcConnectionSpec spec) throws Exception {
+        for (var client = 0; client < 250; client++) {
+            try (final var connection = connect(spec);
+                    final var statement = connection.createStatement();
+                    final var rows = statement.executeQuery("SELECT 1 FROM dual")) {
+                rows.next();
+                assertEquals(1, rows.getInt(1));
+            }
+        }
+        final var clients = new ArrayList<Connection>();
+        try {
+            // Exceeds the stock image's dedicated-client headroom.
+            for (var client = 0; client < 160; client++) {
+                clients.add(connect(spec));
+            }
+            for (final var connection : clients) {
+                try (final var statement = connection.createStatement();
+                        final var rows = statement.executeQuery("SELECT 1 FROM dual")) {
+                    rows.next();
+                    assertEquals(1, rows.getInt(1));
+                }
+            }
+        } finally {
+            for (final var connection : clients) {
+                connection.close();
+            }
+        }
+    }
+
+    @Test
+    @OracleDatabase(name = "CRYPTO")
+    void grantsRealDbmsCryptoToSchema(@JdbcNamed("CRYPTO") final JdbcConnectionSpec spec) throws Exception {
+        try (final var connection = connect(spec);
+                final var statement = connection.createStatement();
+                final var rows = statement.executeQuery(
+                        "SELECT RAWTOHEX(DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW('abc'), 4)) FROM dual")) {
+            rows.next();
+            assertEquals("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", rows.getString(1));
+        }
+    }
+
+    @Test
+    @OracleDatabase(name = "XML_REFERENCE")
+    void oracleXmlTextAggregationReference(@JdbcNamed("XML_REFERENCE") final JdbcConnectionSpec spec) throws Exception {
+        try (final var connection = connect(spec);
+                final var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE XML_VALUES (SEQ NUMBER, PAYLOAD VARCHAR2(100))");
+            statement.execute("INSERT INTO XML_VALUES VALUES (2, 'B')");
+            statement.execute("INSERT INTO XML_VALUES VALUES (1, 'A<&')");
+            statement.execute("INSERT INTO XML_VALUES VALUES (3, NULL)");
+            try (final var rows = statement.executeQuery(
+                    "SELECT RTRIM(XMLCAST(XMLAGG(XMLELEMENT(e, payload || ' + ') ORDER BY seq) AS CLOB), ' + ') FROM XML_VALUES")) {
+                rows.next();
+                assertEquals("A<& + B", rows.getString(1));
+            }
+            try (final var rows = statement.executeQuery("SELECT LEVEL FROM dual CONNECT BY LEVEL <= 0")) {
+                rows.next();
+                assertEquals(1, rows.getInt(1));
+                assertEquals(false, rows.next());
+            }
+        }
+    }
+
     @Test
     @OracleDatabase(
             name = "SRC",

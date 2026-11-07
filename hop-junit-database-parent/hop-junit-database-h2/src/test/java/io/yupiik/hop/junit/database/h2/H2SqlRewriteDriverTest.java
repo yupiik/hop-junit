@@ -70,9 +70,9 @@ class H2SqlRewriteDriverTest {
         final var url = driver.wrap("jdbc:h2:mem:" + getClass().getSimpleName() + ";MODE=Oracle");
         try (final var connection = DriverManager.getConnection(url);
                 final var statement = connection.createStatement()) {
-            // Oracle-style partition syntax and "SA".schema shims must be rewritten and still work.
-            // The table is created in the default (unqualified) schema; the "SA". qualifier used in the
-            // query is stripped by the rewriter so it resolves to the same table.
+            // Schema qualification is fixture-owned; only the partition syntax is approximated.
+            statement.execute("CREATE SCHEMA SA");
+            statement.execute("SET SCHEMA SA");
             statement.execute("CREATE TABLE ORDERS (ID INT, NAME VARCHAR(20))");
             statement.execute("INSERT INTO ORDERS VALUES (1, 'a')");
             try (final var prepared = connection.prepareStatement(
@@ -90,6 +90,8 @@ class H2SqlRewriteDriverTest {
         final var url = driver.wrap("jdbc:h2:mem:" + getClass().getSimpleName() + "2;MODE=Oracle");
         try (final var connection = DriverManager.getConnection(url);
                 final var statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA SA");
+            statement.execute("SET SCHEMA SA");
             statement.execute("CREATE TABLE T (ID INT)");
             statement.execute("INSERT INTO T VALUES (7)");
             try (final var resultSet = statement.executeQuery("SELECT ID FROM \"SA\".T PARTITION(P1)")) {

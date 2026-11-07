@@ -55,6 +55,18 @@ public class H2DatabaseExtension extends BaseDatabaseExtension {
      * driver and overriding the rewriter), falling back to the built-in driver when none is present.
      */
     private static H2SqlRewriteDriver registeredRewriteDriver() {
+        final var custom = DriverManager.drivers()
+                .filter(H2SqlRewriteDriver.class::isInstance)
+                .map(H2SqlRewriteDriver.class::cast)
+                .filter(it -> it.getClass() != H2SqlRewriteDriver.class)
+                .filter(it -> it.acceptsURL("jdbc:testoracleextended:h2:placeholder"))
+                .toList();
+        if (custom.size() > 1) {
+            throw new IllegalStateException("Multiple custom Oracle-to-H2 JDBC drivers registered: " + custom);
+        }
+        if (!custom.isEmpty()) {
+            return custom.getFirst();
+        }
         try {
             final var driver = DriverManager.getDriver("jdbc:testoracleextended:h2:placeholder");
             if (driver instanceof H2SqlRewriteDriver rewriteDriver) {
@@ -107,7 +119,10 @@ public class H2DatabaseExtension extends BaseDatabaseExtension {
                 ? rewriteDriver.wrap(jdbcUrl)
                 : jdbcUrl;
         final var spec = new JdbcConnectionSpec(database.name(), "sa", "", hopJdbcUrl, DatabaseImplementation.H2, null);
-        registerOracleExtendedShims(connection, resolveMode(database.specificData()));
+        if (resolveMode(database.specificData()) == H2DatabaseMode.ORACLE_EXTENDED) {
+            registerOracleExtendedShims(connection, H2DatabaseMode.ORACLE_EXTENDED);
+            OracleDictionaryEmulation.install(connection);
+        }
         return new ManagedDatabase(spec, connection, database.expected());
     }
 
@@ -123,6 +138,9 @@ public class H2DatabaseExtension extends BaseDatabaseExtension {
             return;
         }
         try (var statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA IF NOT EXISTS DBMS_XMLGEN");
+            statement.execute(
+                    "CREATE ALIAS IF NOT EXISTS DBMS_XMLGEN.GETXML FOR 'io.yupiik.hop.junit.database.h2.driver.OracleXmlFunctions.getXml'");
             for (final var method : H2OracleExtendedShims.class.getDeclaredMethods()) {
                 if (java.lang.reflect.Modifier.isStatic(method.getModifiers())
                         && java.lang.reflect.Modifier.isPublic(method.getModifiers())) {

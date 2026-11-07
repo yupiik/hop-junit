@@ -92,6 +92,8 @@ public abstract class BaseDatabaseExtension implements BeforeEachCallback, After
     public final void beforeEach(final ExtensionContext context) throws Exception {
         beforeDatabases(context);
         final var specs = new LinkedHashMap<String, ManagedDatabase>();
+        // Register before creating/seeding anything: afterEach must see partial setup too.
+        context.getStore(namespace(context)).put(context.getUniqueId(), specs);
         final var database = DatabaseImplementation.current();
         final var descriptors = findDatabases(context);
         for (final var descriptor : descriptors) {
@@ -113,7 +115,6 @@ public abstract class BaseDatabaseExtension implements BeforeEachCallback, After
             final var normal = Arrays.stream(all).filter(it -> !it.admin()).toArray(DbInit[]::new);
             seedDataset(managed, normal);
         }
-        context.getStore(namespace(context)).put(context.getUniqueId(), specs);
     }
 
     @Override

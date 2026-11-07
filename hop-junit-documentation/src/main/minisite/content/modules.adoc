@@ -35,19 +35,29 @@ The database testing framework is grouped under the `hop-junit-database-parent` 
 
 [NOTE]
 ====
-To extend the built-in Oracle-to-H2 rewrites without changing this module, subclass
-`H2SqlRewriteDriver`, override the constructor-provided rewriter with your own, and register the
-subclass with `java.sql.DriverManager` (via `META-INF/services/java.sql.Driver` or an explicit
-`DriverManager.registerDriver` call in your own code). `H2DatabaseExtension` reuses the registered
-rewrite driver through `DriverManager` and falls back to the built-in driver when none is present.
-The private Oracle admin hook (`OracleAdminProvisioner`) lets consumers add owner-scoped
-provisioning (for example a `DBMS_CRYPTO` stand-in or per-schema grants and synonyms) from their own
-project, keeping the extension generic.
+To extend the built-in Oracle-to-H2 rewrites without changing this module, subclass `H2SqlRewriteDriver`, supply your function to `super(rewriter, "jdbc:testoracleextended:h2:")`, and register the subclass with `java.sql.DriverManager` before creating the extension (via `META-INF/services/java.sql.Driver` or an explicit `DriverManager.registerDriver` call).
+`H2DatabaseExtension` prefers one registered subclass accepting that prefix, rejects multiple such subclasses, and otherwise uses the built-in driver.
+The built-in driver's connection path also delegates to that registered subclass, so a previously registered built-in instance cannot silently bypass the custom rewrite function.
+JDBC interface unwrapping returns the rewriting wrapper; intentionally unwrapping an H2 implementation class exposes the underlying object and bypasses rewriting.
+The Oracle admin hook (`OracleAdminProvisioner`) lets consumers add owner-scoped provisioning (for example per-schema grants and synonyms) from their own project, keeping the extension generic.
 ====
 
-NOTE: Oracle compatibility is partial: H2 tables are not physically partitioned and the rewrite removes `PARTITION(...)`, so reads include the whole fixture table, not just the named partition.
+NOTE: Oracle compatibility is partial: H2 tables are not physically partitioned and the rewrite removes `PARTITION(...)` on reads, so reads include the whole fixture table, not just the named partition.
+Partition-targeted writes are rejected instead of silently broadening their effect.
+Ordered `XMLCAST(XMLAGG(XMLELEMENT(name, scalar_text) ORDER BY ...) AS CLOB)` is supported for one scalar text argument, preserving surrounding RTRIM expressions, XML characters, nulls and large character results; it is not a general XML engine.
 The H2 `_ROWID_` and `ORA_HASH` shim support repeatable reader bands for unchanged fixture rows but do not reproduce Oracle row identifiers or hash values.
-Whole-query application templates, Oracle dictionary XML extraction, and general hierarchical queries are not emulated by this driver.
+Whole-query application templates are not emulated by this driver.
+Single-named-source `CONNECT BY` queries with `LEVEL` termination are lowered to recursive CTEs, including qualified `PRIOR` columns, `START WITH`, post-hierarchy filters and duplicate source rows.
+This subset does not implement Oracle cycle detection, `NOCYCLE`, hierarchy path functions, sibling ordering, joined/derived sources, or binds inside the hierarchy block; unsupported shapes must not be treated as Oracle-equivalent.
+A missing or zero upper bound still emits the root, as on Oracle.
+Date arithmetic translation recognizes explicit Oracle date expressions and `TO_DATE` projection aliases, not arbitrary JDBC column types; date differences use numeric days at Oracle DATE second precision.
+Date-plus/minus-numeric `CASE` operands support searched, simple and nested cases when every result branch is a numeric literal, bind, `TO_NUMBER`, numeric cast, arithmetic over those forms, or NULL (including an omitted ELSE).
+Conditions and selectors are preserved, fractional offsets retain time-of-day, and unknown column/function result types or mixed date/text branches are left untranslated rather than assumed numeric.
+Date aliases are inferred from their own CTE projections, not unrelated projections sharing the same column name; this is conservative inference, not general SQL type resolution.
+`DBMS_XMLGEN.GETXML` executes a single SELECT on the active connection, serializes ROWSET/ROW XML, omits null columns, and returns null for no rows.
+It excludes writes, multiple statements and WITH queries, but does not sandbox user-installed SQL functions.
+XMLTABLE/PASSING, namespaces, arbitrary XML column names and complete Oracle XML serialization parity remain unsupported.
+In `ORACLE_EXTENDED` mode the `ALL_TABLES`, `ALL_TAB_COLS`, `ALL_TAB_COLUMNS` and `ALL_CONSTRAINTS` dictionaries are auto-installed as H2 views over `INFORMATION_SCHEMA`, so they always reflect the real schema (including `SA.X FOR PUBLIC.X` synonyms reported under the `SA` owner). The partition/app-metadata dictionaries (`ALL_TAB_PARTITIONS`, `ALL_PART_TABLES`, `ALL_PART_KEY_COLUMNS`, `ALL_PART_INDEXES`, `ALL_IND_PARTITIONS` and the `USER_*` index views) are installed as empty Oracle-typed scaffold tables that the consumer seeds with its own partition data; neither dictionary type should be re-created by the consumer. Schema-qualified references must be backed by real H2 schemas or synonyms; no schema prefix is silently removed.
 SHA-1 character input is encoded as UTF-8 for H2, which matches Oracle only when the Oracle database uses a compatible character encoding.
 * `hop-junit-database-oracle` - the Oracle backend (`OracleDatabaseExtension`, `@OracleDatabase`),
   backed by a real Oracle 23ai Free Testcontainers container with per-schema isolation. The Oracle
