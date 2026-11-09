@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -40,6 +40,10 @@ import org.apache.hop.pipeline.engine.IPipelineEngine;
 import org.apache.hop.pipeline.transform.ITransform;
 import org.apache.hop.pipeline.transform.TransformMeta;
 
+/**
+ * Instruments an {@link IPipelineEngine} run to collect Hop coverage (nodes/edges executed) and produces
+ * the {@link Execution} recorded by {@link HopCoverageRuntime}. Used internally by the pipeline fixture.
+ */
 public final class PipelineCoverageCollector {
     private final String id = HopCoverageRuntime.INSTANCE.nextExecutionId();
     private final Path artifactPath;
@@ -303,10 +307,8 @@ public final class PipelineCoverageCollector {
             final var targetCovered = toNode != null && toNode.isCovered();
             final var covered = enabled
                     && (rowCount > 0
-                            || (sourceCovered
-                                    && targetCovered
-                                    && (outgoingEdges == 1 || (fromNode != null && fromNode.duplicatesRows())))
-                            || (sourceCovered && toNode != null && toNode.readRows()));
+                            || sourceCovered && targetCovered && (outgoingEdges == 1 || fromNode.duplicatesRows())
+                            || sourceCovered && toNode != null && toNode.readRows());
             return new Edge(edgeId(from, to), from, to, enabled, covered, null, rowCount, covered, targetCovered);
         }
 

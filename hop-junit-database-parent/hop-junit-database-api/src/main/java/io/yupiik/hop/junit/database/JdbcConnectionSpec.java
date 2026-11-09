@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -20,6 +20,10 @@ package io.yupiik.hop.junit.database;
  * selects the engine; {@link #databaseTypeName()} derives the Hop {@code DatabaseMeta} type from it.
  * Host/port/service are not carried separately: the Oracle {@code jdbcUrl} is parsed when needed.
  *
+ * @param name the logical name of the connection ({@code @JdbcNamed} value)
+ * @param username the connection user
+ * @param password the connection password
+ * @param jdbcUrl the JDBC URL (plain, in-memory H2 URL for H2; container URL for Oracle)
  * @param implementation the engine (H2 or ORACLE), drives {@link #databaseTypeName()}
  * @param schema the schema (SRC, TGT, ...) backed by this named connection (Oracle); null on H2
  */
@@ -31,7 +35,11 @@ public record JdbcConnectionSpec(
         DatabaseImplementation implementation,
         String schema) {
 
-    /** The Hop {@code DatabaseMeta} database type name ({@code "H2"} or {@code "ORACLE"}). */
+    /**
+     * The Hop {@code DatabaseMeta} database type name ({@code "H2"} or {@code "ORACLE"}).
+     *
+     * @return the upper-cased {@link DatabaseImplementation} name
+     */
     public String databaseTypeName() {
         return implementation.name();
     }

@@ -98,7 +98,7 @@ classpath, then:
         @DbInit(value = "datasets/prep.yml", operation = DatasetOperation.CLEAN_INSERT),
 }, expected = @DbExpected("datasets/expected.yml"))
 void seededDatabaseCanBeInjected(@JdbcNamed("SRC") final JdbcConnectionSpec src) {
-    // src.jdbcUrl() is the plain H2 URL, src.hopJdbcUrl() the one Hop should connect through.
+    // src.jdbcUrl() is the plain H2 URL; databaseTypeName() is "H2" (or "ORACLE").
     assertEquals("H2", src.databaseTypeName());
 }
 ----

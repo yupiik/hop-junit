@@ -17,8 +17,9 @@ This page is the reference for the main entry points.
 
 === `@HopPipeline` / `@HopWorkflow`
 
-Method annotations that declare which artifact to run. Both are repeatable and support a single-level
-meta-annotation alias for `@HopParameters`.
+Method annotations that declare which artifact to run. Both are method-level only and not repeatable -
+declare one pipeline/workflow per test method. The single-level meta-annotation alias for
+`@HopParameters` is supported by `@HopParameters`, not by the pipeline/workflow annotations.
 
 [cols="2,4", options="header"]
 |===
@@ -87,9 +88,10 @@ A named database is injected as a `JdbcConnectionSpec`:
 [source,java]
 ----
 void test(@JdbcNamed("SRC") final JdbcConnectionSpec src) {
-    // H2: jdbcUrl() is the plain in-memory URL, hopJdbcUrl() the (wrapped) URL Hop connects through.
-    // Oracle: host(), port(), service() and schema() describe the container-side schema.
-    spec -> databaseTypeName(); // "H2" or "ORACLE" - the Hop DatabaseMeta type
+    // H2: jdbcUrl() is the plain in-memory URL.
+    // The record exposes name(), username(), password(), jdbcUrl(), implementation() and schema().
+    // databaseTypeName() returns the Hop DatabaseMeta type: "H2" or "ORACLE".
+    spec -> src.databaseTypeName();
 }
 ----
 

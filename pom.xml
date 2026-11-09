@@ -9,17 +9,53 @@
 
   <name>Hop JUnit</name>
   <description>JUnit 5 extension framework to test Apache Hop pipelines and workflows, with an engine-agnostic database testing facade (H2 by default, real Oracle via Testcontainers).</description>
-  <inceptionYear>2026</inceptionYear>
+
+  <inceptionYear>2026 - present</inceptionYear>
+
   <organization>
     <name>Yupiik SAS</name>
     <url>https://yupiik.io/</url>
   </organization>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://github.com/yupiik/fusion/blob/master/LICENSE</url>
+      <distribution>may be downloaded from the Maven repository</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>rmannibucau</id>
+      <name>Romain Manni-Bucau</name>
+      <roles>
+        <role>Contributor</role>
+      </roles>
+      <timezone>+1</timezone>
+    </developer>
+    <developer>
+      <id>fpapon</id>
+      <name>Francois Papon</name>
+      <roles>
+        <role>Contributor</role>
+      </roles>
+      <timezone>+1</timezone>
+    </developer>
+  </developers>
 
   <modules>
     <module>hop-junit-database-parent</module>
     <module>hop-junit-core</module>
     <module>hop-junit-documentation</module>
   </modules>
+
+  <scm>
+    <connection>scm:git:https://github.com/yupiik/hop-junit.git</connection>
+    <developerConnection>scm:git:https://github.com/yupiik/hop-junit.git</developerConnection>
+    <tag>HEAD</tag>
+    <url>https://github.com/yupiik/hop-junit.git</url>
+  </scm>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -404,4 +440,74 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.12.0</version>
+            <configuration>
+              <source>21</source>
+              <doclint>none</doclint>
+              <encoding>UTF-8</encoding>
+              <failOnError>false</failOnError>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <configuration>
+              <gpgArguments>
+                <arg>--digest-algo=SHA512</arg>
+              </gpgArguments>
+            </configuration>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <phase>verify</phase>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>net.nicoulaj.maven.plugins</groupId>
+            <artifactId>checksum-maven-plugin</artifactId>
+            <version>1.11</version>
+            <configuration>
+              <algorithms>
+                <algorithm>SHA-512</algorithm>
+              </algorithms>
+              <csvSummary>false</csvSummary>
+            </configuration>
+            <executions>
+              <execution>
+                <id>source-release-checksum</id>
+                <goals>
+                  <goal>artifacts</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

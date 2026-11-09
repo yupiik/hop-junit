@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -29,6 +29,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
+/**
+ * Renders the aggregate coverage report as an AsciiDoc document using localized messages (see
+ * {@code HopCoverageAdocRenderer_<locale>.properties}), honoring the expected-coverage threshold from
+ * the {@link HopCoverageConfig}.
+ */
 public final class HopCoverageAdocRenderer {
     private static final double DEFAULT_EXPECTED_COVERAGE = 80d;
 

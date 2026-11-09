@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -67,7 +67,7 @@ public record HopCoverageConfig(
                         string("hop.coverage.report.adoc.title", "Couverture de tests Hop"),
                         string(
                                 "hop.coverage.report.adoc.description",
-                                "Synth\u00e8se g\u00e9n\u00e9r\u00e9e depuis les ex\u00e9cutions JUnit Hop."),
+                                "Synthèse générée depuis les exécutions JUnit Hop."),
                         bool("hop.coverage.report.adoc.enableMinisiteHopLinking", false),
                         language(
                                 "hop.coverage.report.adoc.language",

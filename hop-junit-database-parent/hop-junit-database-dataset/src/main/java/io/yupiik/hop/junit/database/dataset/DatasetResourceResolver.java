@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -51,8 +51,12 @@ public class DatasetResourceResolver {
     }
 
     /**
-     * Resolve a directory (used for {@code *.sql} expansion), preferring the filesystem and falling
-     * back to a classpath directory. Returns empty when neither exists.
+     * Resolve a directory (used for directory-based CSV datasets and for {@code *.sql} expansion),
+     * preferring the filesystem and falling back to a classpath directory. Returns empty when neither exists.
+     *
+     * @param resource the resource name of the directory (leading slash tolerated)
+     * @return the resolved directory {@link Path}, or {@link Optional#empty()} when neither a filesystem
+     *     directory nor a classpath resource resolves to a directory
      */
     public Optional<Path> resolveDirectory(final String resource) {
         final var onDisk = Path.of(resource);

@@ -19,23 +19,29 @@ The database testing framework is grouped under the `hop-junit-database-parent` 
 
 * `hop-junit-database-api` - the engine-agnostic contract. It defines `BaseDatabaseExtension`
   (the backend SPI), the `Descriptor`/`ManagedDatabase` records, and the pure-JDK types
-  `@DbInit`, `@DbExpected`, `@DbComparison`, `DatasetFormat`, `DatasetOperation`,
-  `DatabaseImplementation`, `H2DatabaseMode`, `JdbcNamed` and `JdbcConnectionSpec`. It has no DBUnit
+  `@DbInit`, `@DbExpected`, the `DbComparison`, `DatasetFormat`, `DatasetOperation`,
+  `DatabaseImplementation`, `JdbcNamed` and `JdbcConnectionSpec`. It has no DBUnit
   and no Apache Hop dependency.
-* `hop-junit-database-core` - the `@Database` facade and its `DatabaseExtension`. It resolves the
+* `hop-junit-database-core` - the `@Database` facade (and its repeatable container `@Databases`) and its
+  `DatabaseExtension`. It resolves the
   backend through `java.util.ServiceLoader` (`DatabaseExtensionRegistry`), matching
   `BaseDatabaseExtension.name()` against `DatabaseImplementation.current()`. No backend type is
   referenced here, so the backend jars may be absent until the facade actually needs them.
-* `hop-junit-database-testcontainers` - the shared `TestContainerDatabaseExtension` plus the DBUnit
-  dataset engine (`DbUnitEngine`) and the SQL script runner (`SqlScriptRunner`). Both H2 and Oracle
-  seed/verify through `DbUnitEngine`.
-* `hop-junit-database-h2` - the H2 backend (`H2DatabaseExtension`, `@H2Database`), an in-memory
-  Oracle-compatible H2 database and a JDBC driver (`H2SqlRewriteDriver`) that rewrites Oracle SQL
-  for H2. Registered for the `H2` implementation.
+* `hop-junit-database-testcontainers` - the shared `TestContainerDatabaseExtension` base used by the
+  container-backed backends (H2 has its own in-memory path, Oracle and Testcontainers derive from this).
+  It depends only on the API module.
+* `hop-junit-database-dataset` - the DBUnit dataset engine (`DbUnitEngine`), the SQL script runner
+  (`SqlScriptRunner`) and the resource resolver (`DatasetResourceResolver`). Both H2 and Oracle seed and
+  verify through `DbUnitEngine`, so this module sits on top of the testcontainers base.
+* `hop-junit-database-h2` - the H2 backend (`H2DatabaseExtension`, `@H2Database` and its repeatable
+  container `@H2Databases`), an in-memory Oracle-compatible H2 database, the `H2DatabaseMode` enum, and
+  a JDBC driver (`H2SqlRewriteDriver`) that rewrites Oracle SQL for H2. Registered for the `H2`
+  implementation.
 
 [NOTE]
 ====
 To extend the built-in Oracle-to-H2 rewrites without changing this module, subclass `H2SqlRewriteDriver`, supply your function to `super(rewriter, "jdbc:testoracleextended:h2:")`, and register the subclass with `java.sql.DriverManager` before creating the extension (via `META-INF/services/java.sql.Driver` or an explicit `DriverManager.registerDriver` call).
+`wrap(String)` gives the H2 URL the driver accepts; `unwrap(String)` recovers the plain H2 URL.
 `H2DatabaseExtension` prefers one registered subclass accepting that prefix, rejects multiple such subclasses, and otherwise uses the built-in driver.
 The built-in driver's connection path also delegates to that registered subclass, so a previously registered built-in instance cannot silently bypass the custom rewrite function.
 JDBC interface unwrapping returns the rewriting wrapper; intentionally unwrapping an H2 implementation class exposes the underlying object and bypasses rewriting.
@@ -59,7 +65,8 @@ It excludes writes, multiple statements and WITH queries, but does not sandbox u
 XMLTABLE/PASSING, namespaces, arbitrary XML column names and complete Oracle XML serialization parity remain unsupported.
 In `ORACLE_EXTENDED` mode the `ALL_TABLES`, `ALL_TAB_COLS`, `ALL_TAB_COLUMNS` and `ALL_CONSTRAINTS` dictionaries are auto-installed as H2 views over `INFORMATION_SCHEMA`, so they always reflect the real schema (including `SA.X FOR PUBLIC.X` synonyms reported under the `SA` owner). The partition/app-metadata dictionaries (`ALL_TAB_PARTITIONS`, `ALL_PART_TABLES`, `ALL_PART_KEY_COLUMNS`, `ALL_PART_INDEXES`, `ALL_IND_PARTITIONS` and the `USER_*` index views) are installed as empty Oracle-typed scaffold tables that the consumer seeds with its own partition data; neither dictionary type should be re-created by the consumer. Schema-qualified references must be backed by real H2 schemas or synonyms; no schema prefix is silently removed.
 SHA-1 character input is encoded as UTF-8 for H2, which matches Oracle only when the Oracle database uses a compatible character encoding.
-* `hop-junit-database-oracle` - the Oracle backend (`OracleDatabaseExtension`, `@OracleDatabase`),
+* `hop-junit-database-oracle` - the Oracle backend (`OracleDatabaseExtension`, `@OracleDatabase` and its
+  repeatable container `@OracleDatabases`),
   backed by a real Oracle 23ai Free Testcontainers container with per-schema isolation. The Oracle
   dependencies are declared unconditionally; you reference this module inside your own `-Poracle`
   profile. When admin-marked SQL scripts are declared, they run on the SYSTEM connection in

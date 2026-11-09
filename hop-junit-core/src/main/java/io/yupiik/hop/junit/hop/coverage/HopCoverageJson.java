@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -23,6 +23,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * Reads and writes the JSON aggregate-report documents ({@link HopCoverageModels}) that the coverage
+ * post-processor produces, using Jackson with {@code NON_NULL} inclusion defaults.
+ */
 public final class HopCoverageJson {
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)

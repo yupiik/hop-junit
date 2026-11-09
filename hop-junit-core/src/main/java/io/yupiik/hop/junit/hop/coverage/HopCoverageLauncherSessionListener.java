@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -21,6 +21,10 @@ import org.junit.platform.launcher.LauncherSessionListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * JUnit platform {@link LauncherSessionListener} that triggers the coverage report generation once the
+ * test launcher session closes, when coverage is enabled.
+ */
 public final class HopCoverageLauncherSessionListener implements LauncherSessionListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(HopCoverageLauncherSessionListener.class);
 
@@ -29,11 +33,9 @@ public final class HopCoverageLauncherSessionListener implements LauncherSession
         if (!HopCoverageRuntime.INSTANCE.isEnabled()) {
             return;
         }
-        RuntimeException failure = null;
         try {
             writeJvmReport();
         } catch (final RuntimeException error) {
-            failure = error;
             LOGGER.error("Unable to write Hop coverage JVM report.", error);
             if (HopCoverageRuntime.INSTANCE.config().failOnWriteError()) {
                 throw error;
@@ -49,9 +51,6 @@ public final class HopCoverageLauncherSessionListener implements LauncherSession
                 }
                 throw new IllegalStateException(error);
             }
-        }
-        if (failure != null && HopCoverageRuntime.INSTANCE.config().failOnWriteError()) {
-            throw failure;
         }
     }
 

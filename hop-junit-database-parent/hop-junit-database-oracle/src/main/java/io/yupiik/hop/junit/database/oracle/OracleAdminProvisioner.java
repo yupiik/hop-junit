@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -26,5 +26,13 @@ import java.util.Map;
  * keeping the extension generic. If no provider is registered, nothing extra runs.
  */
 public interface OracleAdminProvisioner {
+    /**
+     * Performs owner-scoped provisioning on the SYSTEM admin connection.
+     *
+     * @param admin the SYSTEM admin JDBC connection
+     * @param specs the named databases the current test created (name to {@link ManagedDatabase}), for
+     *     example to map owners to their schemas
+     * @throws Exception any error aborting the test setup
+     */
     void provision(Connection admin, Map<String, ManagedDatabase> specs) throws Exception;
 }

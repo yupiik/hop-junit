@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -233,7 +233,7 @@ public final class HopCoverageHtmlRenderer {
                 .append("\" data-kind=\"")
                 .append(attribute(kind))
                 .append("\" data-state=\"")
-                .append(stateClass == null ? "ok" : stateClass)
+                .append(stateClass)
                 .append("\" data-nodes=\"")
                 .append(percentNum(artifact.summary().nodes()))
                 .append("\" data-edges=\"")
@@ -270,7 +270,7 @@ public final class HopCoverageHtmlRenderer {
                 .append(requiredText)
                 .append("</td>")
                 .append("<td><span class=\"state-pill ")
-                .append(stateClass == null ? "" : stateClass)
+                .append(stateClass)
                 .append("\">")
                 .append(stateText(stateClass))
                 .append("</span></td></tr>\n")
@@ -281,9 +281,10 @@ public final class HopCoverageHtmlRenderer {
         metric(html, "Branches", artifact.summary().branches());
         html.append("</div>");
         if (required != null) {
-            html.append("<p class=\"threshold-detail\"><strong>Required coverage:</strong> "
-                    + String.format(Locale.ROOT, "%.2f%%", required)
-                    + (overridden(artifact) ? " (overridden)" : " (global default)") + "</p>");
+            html.append("<p class=\"threshold-detail\"><strong>Required coverage:</strong> ")
+                    .append(String.format(Locale.ROOT, "%.2f%%", required))
+                    .append(overridden(artifact) ? " (overridden)" : " (global default)")
+                    .append("</p>");
         }
         html.append("<div class=\"drill-grid\">");
         uncoveredNodes(html, artifact.nodes());
@@ -326,7 +327,7 @@ public final class HopCoverageHtmlRenderer {
         } else {
             html.append("<ul class=\"edge-list\">");
             uncovered.stream()
-                    .sorted(Comparator.comparing((Edge e) -> e.from()).thenComparing(Edge::to))
+                    .sorted(Comparator.comparing(Edge::from).thenComparing(Edge::to))
                     .forEach(edge -> html.append("<li><code>")
                             .append(escape(edge.from()))
                             .append(" &rarr; ")
@@ -365,7 +366,7 @@ public final class HopCoverageHtmlRenderer {
         if (below.isEmpty()) {
             return "<div class=\"banner-inner ok\"><span class=\"dot\"></span><strong>All artifacts</strong> meet their required coverage threshold.</div>";
         }
-        final var first = below.get(0);
+        final var first = below.getFirst();
         final var name = first.artifact().name();
         final var gap = effectiveCoverage(first) - first.summary().coverage().ratio();
         return "<div class=\"banner-inner bad\"><span class=\"dot\"></span><strong>" + below.size()
@@ -417,7 +418,7 @@ public final class HopCoverageHtmlRenderer {
     }
 
     private double width(final Ratio ratio) {
-        return Math.max(0, Math.min(100, ratio.ratio() * 100));
+        return Math.clamp(ratio.ratio() * 100, 0, 100);
     }
 
     private String status(final Ratio ratio) {

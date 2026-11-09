@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -29,14 +29,18 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.OptionalDouble;
 import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Aggregates per-test pipeline/workflow {@link Execution}s into a {@code JvmReport}/{@code AggregateReport}
+ * and renders the configured report format ({@link ReportFormat}) when the JUnit launcher session closes.
+ */
 public final class HopCoveragePostProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(HopCoveragePostProcessor.class);
 
@@ -46,12 +50,14 @@ public final class HopCoveragePostProcessor {
         this.config = config;
     }
 
-    @SuppressWarnings("try") // The file lock must remain held for the entire post-processing operation.
     public AggregateReport run() throws IOException {
         Files.createDirectories(config.workDir());
         final var lockPath = config.workDir().resolve(".post-process.lock");
         try (final var channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                final var ignored = channel.lock()) {
+                final var lock = channel.lock()) {
+            if (!lock.isValid()) {
+                throw new IOException("Failed to acquire post-process lock");
+            }
             return doRun();
         }
     }
@@ -85,7 +91,7 @@ public final class HopCoveragePostProcessor {
                 throw new IOException("Malformed Hop coverage report", error.getCause());
             }
         }
-        executions.sort((a, b) -> a.id().compareTo(b.id()));
+        executions.sort(Comparator.comparing(Execution::id));
         final var artifacts = aggregate(executions);
         final var report = new AggregateReport(
                 HopCoverageRuntime.SCHEMA_VERSION,
@@ -118,7 +124,7 @@ public final class HopCoveragePostProcessor {
         }
         final var reports = new ArrayList<ArtifactReport>();
         for (final var group : grouped.values()) {
-            final var artifact = group.get(0).artifact();
+            final var artifact = group.getFirst().artifact();
             final var nodes = mergeNodes(group);
             final var edges = mergeEdges(group);
             reports.add(new ArtifactReport(
@@ -127,20 +133,19 @@ public final class HopCoveragePostProcessor {
                     nodes,
                     edges,
                     group.stream().map(Execution::id).sorted().toList(),
-                    boxed(config.requiredCoverageFor(artifact.name()))));
+                    config.requiredCoverageFor(artifact.name()).stream()
+                            .boxed()
+                            .findFirst()
+                            .orElse(null)));
         }
         return List.copyOf(reports);
-    }
-
-    private Double boxed(final OptionalDouble value) {
-        return value.isPresent() ? value.getAsDouble() : null;
     }
 
     private List<Node> mergeNodes(final List<Execution> executions) {
         final var nodes = new LinkedHashMap<String, Node>();
         for (final var node : executions.stream()
                 .flatMap(it -> it.nodes().stream())
-                .sorted((a, b) -> a.id().compareTo(b.id()))
+                .sorted(Comparator.comparing(Node::id))
                 .toList()) {
             nodes.merge(node.id(), node, this::merge);
         }
@@ -171,7 +176,7 @@ public final class HopCoveragePostProcessor {
         final var edges = new LinkedHashMap<String, Edge>();
         for (final var edge : executions.stream()
                 .flatMap(it -> it.edges().stream())
-                .sorted((a, b) -> a.id().compareTo(b.id()))
+                .sorted(Comparator.comparing(Edge::id))
                 .toList()) {
             edges.merge(edge.id(), edge, this::merge);
         }

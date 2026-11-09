@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -17,6 +17,11 @@ package io.yupiik.hop.junit.hop.coverage;
 
 import java.util.List;
 
+/**
+ * Immutable data models (records) describing a coverage report: per-JVM and aggregate reports, per-artifact
+ * node/edge coverage ratios, executions and warnings. These are the JSON documents exchanged by
+ * {@link HopCoverageJson} and rendered by {@link HopCoverageAdocRenderer}/{@link HopCoverageHtmlRenderer}.
+ */
 public final class HopCoverageModels {
     private HopCoverageModels() {
         // no-op

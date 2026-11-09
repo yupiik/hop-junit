@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -65,18 +65,27 @@ public final class HopCoverageRuntime {
         return config;
     }
 
+    /** @return {@code true} when coverage is enabled by the shared config */
     public boolean isEnabled() {
         return config.enabled();
     }
 
+    /** @return the next execution id, monotonically increasing across recorded executions */
     public String nextExecutionId() {
         return "%06d".formatted(sequence.incrementAndGet());
     }
 
+    /** @return the current report timestamp formatted for the JSON report */
     public String now() {
         return JSON_DATE.format(Instant.now(CLOCK));
     }
 
+    /**
+     * Records a single pipeline/workflow {@link Execution}; a no-op when coverage is disabled or the
+     * execution is null.
+     *
+     * @param execution the execution to record
+     */
     public void addExecution(final Execution execution) {
         if (config.enabled() && execution != null) {
             executions.add(execution);

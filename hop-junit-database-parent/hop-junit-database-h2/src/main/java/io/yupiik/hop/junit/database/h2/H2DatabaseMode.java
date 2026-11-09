@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -34,6 +34,12 @@ public enum H2DatabaseMode {
         this.options = options;
     }
 
+    /**
+     * The H2 URL options carried by this mode (for example
+     * {@code MODE=Oracle;DATABASE_TO_UPPER=true;DEFAULT_NULL_ORDERING=HIGH}), appended to the connection URL.
+     *
+     * @return the semicolon-separated H2 options, possibly empty
+     */
     public String options() {
         return options;
     }

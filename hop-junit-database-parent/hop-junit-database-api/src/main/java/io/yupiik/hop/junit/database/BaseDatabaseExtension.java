@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -44,7 +44,15 @@ import org.junit.jupiter.api.extension.ParameterResolver;
  */
 public abstract class BaseDatabaseExtension implements BeforeEachCallback, AfterEachCallback, ParameterResolver {
     /** A named database declared by a test. */
-    public record Descriptor(String name, DbInit[] init, DbExpected[] expected, Object specificData) {}
+    public record Descriptor(String name, DbInit[] init, DbExpected[] expected, Object specificData) {
+        /**
+         * @param name the logical database name ({@code @JdbcNamed} value)
+         * @param init the {@code @DbInit} datasets to seed
+         * @param expected the {@code @DbExpected} post-conditions to verify
+         * @param specificData backend-specific extension data (may be null)
+         */
+        public Descriptor {}
+    }
 
     /** Public factory mirroring the {@link Descriptor} canonical constructor (keeps call sites terse). */
     public Descriptor descriptor(
@@ -81,6 +89,11 @@ public abstract class BaseDatabaseExtension implements BeforeEachCallback, After
      * {@link DbExpected} post-conditions to verify after the test.
      */
     public record ManagedDatabase(JdbcConnectionSpec spec, Connection connection, DbExpected[] expected) {
+        /**
+         * @param spec the descriptor-aware connection spec of the created database
+         * @param connection the live JDBC connection
+         * @param expected the {@link DbExpected} post-conditions to verify after the test
+         */
         public ManagedDatabase {}
 
         public ManagedDatabase(final JdbcConnectionSpec spec, final Connection connection) {

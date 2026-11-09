@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -25,11 +25,23 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
-/** Declares a single Hop execution parameter (name/value pair). */
+/**
+ * Declares a single Hop execution parameter (a name/value pair).
+ *
+ * <p>A parameter is bundled into the {@link HopParameter[] parameters()} of {@link HopPipeline} /
+ * {@link HopWorkflow}, or grouped in a batch via {@link HopParameters}. The effective value of a key is
+ * resolved with last-one-wins semantics (see {@link HopParametersSupport}) and is set as a Hop
+ * variable before the artifact runs and substituted into the artifact XML.
+ *
+ * @see HopParameters
+ * @see HopParametersSupport
+ */
 @Target({ANNOTATION_TYPE, TYPE, FIELD, METHOD, PARAMETER})
 @Retention(RUNTIME)
 public @interface HopParameter {
+    /** The parameter name (also the Hop variable name and the {@code ${name}} substitution key). */
     String key();
 
+    /** The parameter value. */
     String value();
 }

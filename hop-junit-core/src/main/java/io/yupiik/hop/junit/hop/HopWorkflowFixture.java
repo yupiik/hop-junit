@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -37,6 +37,20 @@ import org.apache.hop.workflow.engine.IWorkflowEngine;
 import org.apache.hop.workflow.engine.WorkflowEngineFactory;
 import org.apache.hop.workflow.engines.local.LocalWorkflowRunConfiguration;
 
+/**
+ * Fluent builder injected into a test method when {@link HopWorkflow} is declared.
+ *
+ * <p>Use it to override execution parameters and JDBC connections, then call {@link #execute()} to run the
+ * workflow once and obtain a {@link HopWorkflowExecution} to assert on. The fixture is created by
+ * {@link HopWorkflowExtension}, wired to an isolated Hop working tree, and already carries the parameters
+ * declared on the annotation.
+ *
+ * <p>Parameter and connection registration is last-one-wins: subsequent {@link #with(String, String)} /
+ * {@link #withConnection(String, JdbcConnectionSpec)} calls override earlier values, including those
+ * introduced by the {@link HopWorkflow} annotation.
+ *
+ * @see HopWorkflowExecution
+ */
 public final class HopWorkflowFixture {
     private final Path projectHome;
     private final Path workflowPath;
@@ -63,25 +77,61 @@ public final class HopWorkflowFixture {
         this.parameters.putAll(initialParameters);
     }
 
+    /**
+     * Merges the given parameters into the execution parameters, overriding existing keys (last wins).
+     *
+     * @param parameters the name/value pairs to merge
+     * @return this fixture
+     */
     public HopWorkflowFixture with(final Map<String, String> parameters) {
         this.parameters.putAll(parameters);
         return this;
     }
 
+    /**
+     * Sets a single execution parameter, overriding any existing value for {@code name} (last wins).
+     *
+     * @param name the parameter name
+     * @param value the parameter value
+     * @return this fixture
+     */
     public HopWorkflowFixture with(final String name, final String value) {
         parameters.put(name, value);
         return this;
     }
 
+    /**
+     * Registers (or overrides) the {@link JdbcConnectionSpec} used by the named Hop connection at runtime.
+     *
+     * @param hopConnectionName the Hop connection name the workflow resolves
+     * @param spec the connection descriptor
+     * @return this fixture
+     */
     public HopWorkflowFixture withConnection(final String hopConnectionName, final JdbcConnectionSpec spec) {
         connections.put(hopConnectionName, spec);
         return this;
     }
 
+    /**
+     * Alias of {@link #withConnection(String, JdbcConnectionSpec)} for symmetry with {@link #with(String, String)}.
+     *
+     * @param hopConnectionName the Hop connection name the workflow resolves
+     * @param spec the connection descriptor
+     * @return this fixture
+     */
     public HopWorkflowFixture with(final String hopConnectionName, final JdbcConnectionSpec spec) {
         return withConnection(hopConnectionName, spec);
     }
 
+    /**
+     * Runs the workflow (a single, terminal call) and returns the final execution result to assert on.
+     *
+     * <p>The workflow is started and awaited to completion; the returned {@link HopWorkflowExecution} exposes the
+     * Hop {@link Result}, its log text and the {@code assertSuccess()}/{@code assertFailure()}/{@code
+     * assertLogContains()}/{@code assertThat()} assertions.
+     *
+     * @return a fluent execution object wrapping the workflow result
+     */
     public HopWorkflowExecution execute() {
         Result result = null;
         IWorkflowEngine<WorkflowMeta> engine = null;
@@ -184,14 +234,17 @@ public final class HopWorkflowFixture {
         databaseConnections.save(metadataProvider, name, spec);
     }
 
+    /** @return the resolved workflow file path */
     public Path workflowPath() {
         return workflowPath;
     }
 
+    /** @return the Hop project home */
     public Path projectHome() {
         return projectHome;
     }
 
+    /** @return the isolated Hop working directory prepared for this test */
     public Path workDirectory() {
         return workDirectory;
     }

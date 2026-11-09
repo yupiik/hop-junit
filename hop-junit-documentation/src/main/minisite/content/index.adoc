@@ -23,7 +23,10 @@ The site is organized as follows:
 * `hop-junit-database-core` - the engine-agnostic `@Database` facade that selects the backend at
   runtime through `ServiceLoader`.
 * `hop-junit-database-h2` - the default in-memory H2 backend, Oracle-compatible out of the box.
-* `hop-junit-database-testcontainers` - the shared Testcontainers lifecycle and DBUnit dataset engine.
+* `hop-junit-database-testcontainers` - the shared Testcontainers lifecycle base for the
+  container-backed backends.
+* `hop-junit-database-dataset` - the DBUnit dataset engine and SQL script runner used to seed and
+  verify.
 * `hop-junit-database-oracle` - the real Oracle backend (add it inside your own `-Poracle` profile).
 * `hop-junit-core` - the Hop fixtures (`@HopPipeline`, `@HopWorkflow`), parameter/connection wiring
   and Hop scope coverage.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 - Yupiik SAS - https://yupiik.io/
+ * Copyright (c) 2026 - present - Yupiik SAS - https://yupiik.io/
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -36,6 +36,11 @@ import org.apache.hop.workflow.action.ActionMeta;
 import org.apache.hop.workflow.action.IAction;
 import org.apache.hop.workflow.engine.IWorkflowEngine;
 
+/**
+ * Instruments an {@link IWorkflowEngine} run to collect Hop coverage (jobs/actions executed and their
+ * transitions) and produces the {@link Execution} recorded by {@link HopCoverageRuntime}. Used internally
+ * by the workflow fixture.
+ */
 public final class WorkflowCoverageCollector {
     private final String id = HopCoverageRuntime.INSTANCE.nextExecutionId();
     private final Path artifactPath;
