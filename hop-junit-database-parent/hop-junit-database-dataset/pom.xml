@@ -48,14 +48,6 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.poi</groupId>
-      <artifactId>poi</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.poi</groupId>
-      <artifactId>poi-ooxml</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
     </dependency>
@@ -67,6 +59,20 @@
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- XLS/XLSX datasets (XlsDataSet) need Apache POI at runtime. Declared in test scope only so this
+         module can exercise the XLS path without forcing POI onto consumers; consumers who want Excel
+         datasets add org.apache.poi:poi and org.apache.poi:poi-ooxml themselves (version managed by the
+         parent POM dependencyManagement). -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
