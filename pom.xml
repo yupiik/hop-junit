@@ -83,7 +83,7 @@
     <h2.version>2.3.232</h2.version>
     <dbunit.version>3.5.2</dbunit.version>
     <snakeyaml.version>2.2</snakeyaml.version>
-    <jackson.version>2.22.1</jackson.version>
+    <jackson.version>2.22.4</jackson.version>
     <poi.version>5.5.1</poi.version>
     <hop.version>2.20.0</hop.version>
     <testcontainers.version>1.21.4</testcontainers.version>
