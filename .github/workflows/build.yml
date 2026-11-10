@@ -19,7 +19,7 @@ jobs:
     steps:
       # composite action: checkout + JDK + maven cache + maven install (from Maven Central)
       - name: Setup Maven Action
-        uses: s4u/setup-maven-action@8da9a2ce045f6f610f43985a87a62f256e963374
+        uses: s4u/setup-maven-action@6f4258affaf478b384ea1efa19f5938ffe9388c5
         with:
           maven-version: '3.9.16'
           java-version: '25'
