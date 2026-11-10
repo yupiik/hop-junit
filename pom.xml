@@ -71,7 +71,7 @@
     <hop.version>2.20.0</hop.version>
     <testcontainers.version>1.21.4</testcontainers.version>
     <ojdbc.version>23.9.0.25.07</ojdbc.version>
-    <yupiik-tools.version>1.3.1-SNAPSHOT</yupiik-tools.version>
+    <yupiik-tools.version>1.3.1</yupiik-tools.version>
     <slf4j.version>2.0.20</slf4j.version>
     <log4j.version>2.26.1</log4j.version>
 
