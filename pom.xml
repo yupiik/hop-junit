@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright (c) 2026 - present - Yupiik SAS - https://www.yupiik.com
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
@@ -9,18 +26,18 @@
 
   <name>Hop JUnit</name>
   <description>JUnit 5 extension framework to test Apache Hop pipelines and workflows, with an engine-agnostic database testing facade (H2 by default, real Oracle via Testcontainers).</description>
+  <url>https://github.com/yupiik/hop-junit</url>
 
   <inceptionYear>2026 - present</inceptionYear>
-
   <organization>
     <name>Yupiik SAS</name>
-    <url>https://yupiik.io/</url>
+    <url>https://www.yupiik.com</url>
   </organization>
 
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
-      <url>https://github.com/yupiik/fusion/blob/master/LICENSE</url>
+      <url>https://github.com/yupiik/hop-junit/blob/main/LICENSE</url>
       <distribution>may be downloaded from the Maven repository</distribution>
     </license>
   </licenses>
@@ -384,24 +401,6 @@
               <version>2.96.0</version>
             </palantirJavaFormat>
             <removeUnusedImports />
-            <licenseHeader>
-              <content><![CDATA[/*
- * Copyright (c) ${project.inceptionYear} - ${project.organization.name} - ${project.organization.url}
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-]]></content>
-            </licenseHeader>
             <excludes>
               <exclude>**/generated/**</exclude>
               <exclude>**/generated_*/**</exclude>
@@ -438,6 +437,62 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <version>5.1.2</version>
+        <inherited>false</inherited>
+        <configuration>
+          <aggregate>true</aggregate>
+          <mapping>
+            <adoc>DOUBLESLASH_STYLE</adoc>
+          </mapping>
+          <licenseSets>
+            <licenseSet>
+              <inlineHeader><![CDATA[Copyright (c) ${project.inceptionYear} - ${project.organization.name} - ${project.organization.url}
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+ https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+]]></inlineHeader>
+              <useDefaultExcludes>true</useDefaultExcludes>
+              <includes>
+                <include>**/*.properties</include>
+                <include>**/*.java</include>
+                <include>**/*.xml</include>
+                <include>**/*.yaml</include>
+              </includes>
+              <excludes>
+                <exclude>LICENSE</exclude>
+                <exclude>**/*.adoc</exclude>
+                <exclude>**/*.idea</exclude>
+                <exclude>**/target/**</exclude>
+                <exclude>**/generated/**</exclude>
+                <exclude>**/minisite/**</exclude>
+                <exclude>**/file</exclude>
+                <exclude>**/.m2/**</exclude>
+              </excludes>
+            </licenseSet>
+          </licenseSets>
+        </configuration>
+        <executions>
+          <execution>
+            <id>check-license</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>validate</phase>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 
@@ -449,6 +504,38 @@
       </activation>
       <build>
         <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.4.0</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-release-plugin</artifactId>
+            <version>3.3.1</version>
+            <configuration>
+              <autoVersionSubmodules>true</autoVersionSubmodules>
+              <releaseProfiles>release</releaseProfiles>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.12.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+            </configuration>
+          </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
