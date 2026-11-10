@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yupiik.hop.junit.database.h2.driver.H2SqlRewriteDriver;
 import java.sql.DriverManager;
+import org.h2.engine.Constants;
 import org.junit.jupiter.api.Test;
 
 class H2SqlRewriteDriverTest {
@@ -57,7 +58,9 @@ class H2SqlRewriteDriverTest {
         final var registered = DriverManager.getDriver("jdbc:testoracleextended:h2:mem:x");
         assertNotNull(registered);
         assertTrue(registered instanceof H2SqlRewriteDriver);
-        assertEquals("2.3", registered.getMajorVersion() + "." + registered.getMinorVersion());
+        assertEquals(
+                Constants.VERSION_MAJOR + "." + Constants.VERSION_MINOR,
+                registered.getMajorVersion() + "." + registered.getMinorVersion());
     }
 
     @Test
