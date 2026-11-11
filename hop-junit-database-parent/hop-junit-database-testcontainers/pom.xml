@@ -22,7 +22,7 @@
   <parent>
     <groupId>io.yupiik.hop.junit</groupId>
     <artifactId>hop-junit-database-parent</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>hop-junit-database-testcontainers</artifactId>
