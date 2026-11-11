@@ -21,6 +21,7 @@ import io.yupiik.hop.junit.database.DatasetFormat;
 import io.yupiik.hop.junit.database.DatasetOperation;
 import io.yupiik.hop.junit.database.DbExpected;
 import io.yupiik.hop.junit.database.DbInit;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -202,9 +203,21 @@ public class DbUnitEngine {
             case FULL_XML -> new FullXmlDataFileLoader().loadDataSet(url);
             case YAML -> new YamlDataSet(java.nio.file.Files.newInputStream(path));
             case JSON -> new JsonDataSet(java.nio.file.Files.newInputStream(path));
-            case XLS -> new XlsDataSet(java.nio.file.Files.newInputStream(path));
+            case XLS -> xlsDataSet(path);
             case CSV -> new CsvDataSet(path.toFile());
         };
+    }
+
+    private static IDataSet xlsDataSet(final Path path) throws Exception {
+        try {
+            return new XlsDataSet(java.nio.file.Files.newInputStream(path));
+        } catch (final NoClassDefFoundError error) {
+            throw new IllegalArgumentException(
+                    "XLS/XLSX dataset support needs Apache POI on the runtime/test classpath; add the "
+                            + "org.apache.poi:poi and org.apache.poi:poi-ooxml dependencies to your test "
+                            + "dependencies (version managed by the hop-junit parent POM)",
+                    error);
+        }
     }
 
     /** Wrap a raw JDBC connection in a DBUnit connection; schema-qualified when a schema is provided. */

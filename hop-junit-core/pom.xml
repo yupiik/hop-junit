@@ -47,10 +47,328 @@
     <dependency>
       <groupId>org.apache.hop</groupId>
       <artifactId>hop-core</artifactId>
+      <exclusions>
+        <!--
+          hop-core transitively drags in a large set of optional, lazily-loaded subsystems that the local
+          pipeline engine path hop-junit-core exercises never touches: the gRPC remote-execution stack
+          (grpc + netty/protobuf/conscrypt/google-auth/re2j/dev.cel), Avro serialization (+ its Jackson
+          dataformat), the Batik SVG rendering suite, the WebDAV VFS provider (commons-vfs2-jackrabbit2 +
+          httpclient/jackrabbit-webdav), JWT (nimbus-jose-jwt), the OWASP HTML encoder and the
+          xml-apis-ext patch. Consumers needing any of those (e.g. Hop's gRPC server, SVG rendering or
+          WebDAV) must add the corresponding jars explicitly. NOTE: io.smallrye:jandex is RETAINED because
+          PluginRegistry.registerPluginClass needs org.jboss.jandex.IndexView at bootstrap (see the inline
+          note in the exclusions). The MinimalClasspathSafetyNetTest guards a break on Hop env bootstrap.
+        -->
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-util</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-alts</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-auth</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-census</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-context</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-googleapis</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-grpclb</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-inprocess</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-netty</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-netty-shaded</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-okhttp</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-protobuf</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-protobuf-lite</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-rls</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-s2a</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-services</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-stub</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-util</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-xds</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.avro</groupId>
+          <artifactId>avro</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+          <artifactId>jackson-dataformat-avro</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-anim</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-awt-util</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-bridge</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-codec</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-constants</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-css</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-dom</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-ext</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-gvt</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-i18n</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-parser</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-script</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-svg-dom</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-svggen</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-transcoder</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-util</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.xmlgraphics</groupId>
+          <artifactId>batik-xml</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-vfs2-jackrabbit2</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.nimbusds</groupId>
+          <artifactId>nimbus-jose-jwt</artifactId>
+        </exclusion>
+        <!-- io.smallrye:jandex is REQUIRED: org.apache.hop.core.plugins.PluginRegistry.registerPluginClass
+             needs org.jboss.jandex.IndexView during HopCoverageRuntime/<PipelineCoverageExtensionPoint>
+             bootstrap, so it must NOT be excluded. -->
+        <exclusion>
+          <groupId>org.owasp.encoder</groupId>
+          <artifactId>encoder</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>xml-apis</groupId>
+          <artifactId>xml-apis-ext</artifactId>
+        </exclusion>
+        <!-- Apache HttpClient 5 (httpclient5 + httpcore5 + httpcore5-h2) is REQUIRED: HopVfs
+             createFileSystemManager/configures org.apache.hc.core5.ssl.TrustStrategy for the VFS HTTP(S)
+             provider at bootstrap, so these must NOT be excluded. Only the legacy Apache HttpClient 4.x
+             httpcore is trimmed. -->
+        <exclusion>
+          <groupId>org.apache.httpcomponents</groupId>
+          <artifactId>httpcore</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hop</groupId>
       <artifactId>hop-engine</artifactId>
+      <exclusions>
+        <!--
+          The Hop web/REST/SOAP server stack (Jakarta EE APIs, Jetty, Jersey-run servlet, Metro web
+          services), the Maven-resolver plugin-download layer and the CommonMark markup renderer are
+          transitively pulled by hop-engine but are NEVER touched by the local pipeline engine path that
+          hop-junit-core exercises. Excluding them keeps the shipped classpath lean; the
+          MinimalClasspathSafetyNetTest guards against accidentally re-introducing them and verifies the
+          retained core classes still link during Hop environment bootstrap.
+        -->
+        <exclusion>
+          <groupId>jakarta.ws.rs</groupId>
+          <artifactId>jakarta.ws.rs-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>jakarta.xml.soap</groupId>
+          <artifactId>jakarta.xml.soap-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>jakarta.xml.ws</groupId>
+          <artifactId>jakarta.xml.ws-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.maven</groupId>
+          <artifactId>maven-resolver-provider</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.maven.resolver</groupId>
+          <artifactId>maven-resolver-connector-basic</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.maven.resolver</groupId>
+          <artifactId>maven-resolver-transport-file</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.maven.resolver</groupId>
+          <artifactId>maven-resolver-transport-http</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.commonmark</groupId>
+          <artifactId>commonmark</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.commonmark</groupId>
+          <artifactId>commonmark-ext-gfm-tables</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.commonmark</groupId>
+          <artifactId>commonmark-ext-task-list-items</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-security</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-server</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-xml</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty.ee11</groupId>
+          <artifactId>jetty-ee11-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty.ee11</groupId>
+          <artifactId>jetty-ee11-servlets</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty.ee11</groupId>
+          <artifactId>jetty-ee11-webapp</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-common</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.inject</groupId>
+          <artifactId>jersey-hk2</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.media</groupId>
+          <artifactId>jersey-media-json-jackson</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.metro</groupId>
+          <artifactId>webservices-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.mozilla</groupId>
+          <artifactId>rhino-all</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.xerial.snappy</groupId>
+          <artifactId>snappy-java</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>info.picocli</groupId>
+          <artifactId>picocli</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>info.picocli</groupId>
+          <artifactId>picocli-codegen</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-util</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hop</groupId>
@@ -65,78 +383,6 @@
       <groupId>org.apache.hop</groupId>
       <artifactId>hop-ui</artifactId>
       <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-tableinput</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-writetolog</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-filterrows</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-execsqlrow</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-abort</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-tableoutput</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-rowstoresult</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-setvariable</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-transform-textfile</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-sql</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-pipeline</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-workflow</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-abort</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-success</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-deletefiles</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-evalfilesmetrics</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-writetolog</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hop</groupId>
-      <artifactId>hop-action-deletefolders</artifactId>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>

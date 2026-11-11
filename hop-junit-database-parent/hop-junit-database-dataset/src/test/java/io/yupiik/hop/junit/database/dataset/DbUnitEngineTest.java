@@ -27,6 +27,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -71,6 +74,38 @@ class DbUnitEngineTest {
             try (var rs = statement.executeQuery("SELECT COUNT(*) FROM PEOPLE")) {
                 rs.next();
                 assertTrue(rs.getInt(1) == 2, "YAML rows should have been seeded from the filesystem");
+            }
+        }
+    }
+
+    @Test
+    void seedsXlsxDataset() throws Exception {
+        // Excel datasets need Apache POI (test scope) at runtime; each sheet is a table, the first row
+        // holds the column headers and the remaining rows the data.
+        final var xlsx = tempDir.resolve("people.xlsx");
+        try (final var workbook = new XSSFWorkbook()) {
+            final Sheet sheet = workbook.createSheet("PEOPLE");
+            final Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("ID");
+            header.createCell(1).setCellValue("NAME");
+            final Row r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue(1);
+            r1.createCell(1).setCellValue("Alice");
+            final Row r2 = sheet.createRow(2);
+            r2.createCell(0).setCellValue(2);
+            r2.createCell(1).setCellValue("Bob");
+            try (final var out = Files.newOutputStream(xlsx)) {
+                workbook.write(out);
+            }
+        }
+        try (final var connection = h2Connection();
+                var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE PEOPLE (ID INT PRIMARY KEY, NAME VARCHAR(20))");
+            final var init = init(xlsx.toString(), DatasetFormat.AUTO, DatasetOperation.CLEAN_INSERT);
+            engine.seed(connection, null, new DbInit[] {init});
+            try (var rs = statement.executeQuery("SELECT COUNT(*) FROM PEOPLE")) {
+                rs.next();
+                assertTrue(rs.getInt(1) == 2, "XLSX rows should have been seeded");
             }
         }
     }

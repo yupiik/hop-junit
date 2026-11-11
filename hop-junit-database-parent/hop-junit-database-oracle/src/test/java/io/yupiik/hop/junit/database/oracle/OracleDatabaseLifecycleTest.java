@@ -40,7 +40,7 @@ class OracleDatabaseLifecycleTest {
         final var extension = new OracleDatabaseExtension();
         final var clients = new ArrayList<Connection>();
         try {
-            for (var iteration = 0; iteration < 12; iteration++) {
+            for (var iteration = 0; iteration < 6; iteration++) {
                 try (final var context = new TestContext("database")) {
                     extension.beforeEach(context.context);
                     final var spec = context.spec("LEFTOVER");

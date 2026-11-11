@@ -77,9 +77,31 @@ loaded as a DBUnit dataset and applied with `operation()` (`CLEAN_INSERT` by def
 `format()` (`AUTO` infers from the extension), `supportedDatabases()` (empty = all), `admin()` (run
 through the admin connection - Oracle provisioning), `caseSensitive()`.
 
+The default `AUTO` resolution maps the resource extension to a dataset format: `.yaml`/`.yml` to YAML,
+`.xml` to flat XML (or full XML for the `FLAT_XML`/`FULL_XML` formats), `.csv` to CSV, `.json` to JSON.
+`.xls`/`.xlsx` map to `XLS`, which is available only when Apache POI is on the test classpath:
+
+[source,xml]
+----
+<dependency>
+  <groupId>org.apache.poi</groupId>
+  <artifactId>poi</artifactId>
+  <scope>test</scope>
+</dependency>
+<dependency>
+  <groupId>org.apache.poi</groupId>
+  <artifactId>poi-ooxml</artifactId>
+  <scope>test</scope>
+</dependency>
+----
+
+The version is managed by the hop-junit parent POM, so no `<version>` is needed. Without POI, seeding an
+`.xls`/`.xlsx` dataset fails with a clear message telling you to add those dependencies. YAML, XML, CSV
+and JSON need no extra dependency (DBUnit brings them transitively).
+
 `@DbExpected` verifies a post-condition dataset in `afterEach`, only when the test passed. Knobs:
 `format()`, `comparison()` (`STRICT`/`ORDERED`/`ROWCOUNT`), `ignoreColumn()` (`table.column` or bare
-`column`), `ignoreTable()`, `caseSensitive()`.
+`column`), `ignoreTable()`, `caseSensitive()`. It supports the same formats as `@DbInit`.
 
 === `JdbcConnectionSpec` / `@JdbcNamed`
 

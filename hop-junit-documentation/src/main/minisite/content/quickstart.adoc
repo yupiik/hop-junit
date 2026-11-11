@@ -46,6 +46,11 @@ Declare the modules that give you the Hop fixture and the H2 database backend:
 The backend is selected from the `database.default.implementation` system property, which defaults
 to `H2`. Nothing else is needed.
 
+Add the `org.apache.hop:hop-transform-*` and `org.apache.hop:hop-action-*` artifacts for the
+transforms and actions your pipeline or workflow actually uses (versions managed by the hop-junit
+parent POM); `hop-junit-core` does not bundle any plugin jar. If your dataset is an `.xls`/`.xlsx`
+workbook, also add `org.apache.poi:poi` and `org.apache.poi:poi-ooxml`.
+
 == 2. Prepare a minimal pipeline
 
 Put a tiny pipeline under `src/test/resources/repositories/` (or any folder you point at via

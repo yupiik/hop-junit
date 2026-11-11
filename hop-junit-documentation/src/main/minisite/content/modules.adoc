@@ -32,7 +32,9 @@ The database testing framework is grouped under the `hop-junit-database-parent` 
   It depends only on the API module.
 * `hop-junit-database-dataset` - the DBUnit dataset engine (`DbUnitEngine`), the SQL script runner
   (`SqlScriptRunner`) and the resource resolver (`DatasetResourceResolver`). Both H2 and Oracle seed and
-  verify through `DbUnitEngine`, so this module sits on top of the testcontainers base.
+  verify through `DbUnitEngine`, so this module sits on top of the testcontainers base. It supports the
+  YAML, XML, CSV and JSON dataset formats out of the box; XLS/XLSX (`XlsDataSet`) needs Apache POI on the
+  test classpath and is documented in the API page.
 * `hop-junit-database-h2` - the H2 backend (`H2DatabaseExtension`, `@H2Database` and its repeatable
   container `@H2Databases`), an in-memory Oracle-compatible H2 database, the `H2DatabaseMode` enum, and
   a JDBC driver (`H2SqlRewriteDriver`) that rewrites Oracle SQL for H2. Registered for the `H2`
@@ -84,6 +86,28 @@ SHA-1 character input is encoded as UTF-8 for H2, which matches Oracle only when
     the collectors, the post-processor, and the generic renderers. It also registers a
     `LauncherSessionListener` so coverage is aggregated and reported when the test session closes.
 
+`hop-junit-core` intentionally depends only on `hop-core` and `hop-engine`, not on concrete
+transform/action plugin jars. Pipelines and workflows are deserialized at runtime, so you must add the
+`hop-transform-*` and `hop-action-*` artifacts that your `.hpl`/`.hwf` files actually use to your own test
+dependencies, for example `org.apache.hop:hop-transform-tableinput` or `org.apache.hop:hop-action-sql`.
+Their versions are managed by the hop-junit parent POM.
+
+To keep the shipped classpath lean, `hop-junit-core` also excludes the heavy optional subsystems that
+`hop-core`/`hop-engine` transitively pull in: the entire Jetty web/REST/SOAP server stack (Jetty,
+Jersey, Metro, Jakarta WS/SOAP/WS APIs, including `jetty-util`), the Maven-resolver plugin-download
+layer, the CommonMark renderer, the gRPC remote-execution stack, Avro serialization (+ its Jackson
+dataformat), the Batik SVG renderer, the Rhino JavaScript engine, Snappy compression, the picocli
+CLI, the WebDAV VFS provider (`commons-vfs2-jackrabbit2`), JWT (`nimbus-jose-jwt`) and the legacy
+Apache HttpClient 4.x `httpcore`. Those are lazily loaded by Hop and never touched by the local
+pipeline engine that `hop-junit-core` exercises, so the local runtime is unaffected. The servlet API,
+`io.smallrye:jandex` and the Apache HttpClient 5 stack (`httpclient5`/`httpcore5`/`httpcore5-h2`) are
+deliberately retained because the Hop environment, plugin registry and VFS require them during
+bootstrap (`jakarta.servlet.http.HttpServlet`, `org.jboss.jandex.IndexView` in `PluginRegistry`,
+`org.apache.hc.core5.ssl.TrustStrategy` in `HopVfs`). The `MinimalClasspathSafetyNetTest` guards this:
+it boots the environment and fails if a trimmed stack is accidentally re-introduced or a retained
+class stops linking. A consumer who needs Hop's embedded web server, gRPC server, SVG rendering or
+WebDAV must add those artifacts explicitly.
+
 * `hop-junit-documentation` - this site.
 
 == Which modules do I need?
@@ -92,7 +116,7 @@ SHA-1 character input is encoded as UTF-8 for H2, which matches Oracle only when
 [cols="1,1a", options="header"]
 |===
 |Use case |Modules
-|Run a pipeline or workflow test with H2 |`hop-junit-core` + `hop-junit-database-api` + `hop-junit-database-core` + `hop-junit-database-h2`
+|Run a pipeline or workflow test with H2 |`hop-junit-core` + `hop-junit-database-api` + `hop-junit-database-core` + `hop-junit-database-h2`, plus the `hop-transform-*`/`hop-action-*` jars your pipelines use
 |Same tests against real Oracle (add your own `-Poracle` profile) |the H2 set + `hop-junit-database-oracle`, and set `database.default.implementation=ORACLE`
 |Only the `@Database` facade, no Hop |`hop-junit-database-api` + `hop-junit-database-core` + (`hop-junit-database-h2` or `hop-junit-database-oracle`)
 |===
