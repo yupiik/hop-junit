@@ -21,7 +21,7 @@
 
   <groupId>io.yupiik.hop.junit</groupId>
   <artifactId>hop-junit-parent</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>Hop JUnit</name>
@@ -70,7 +70,7 @@
   <scm>
     <connection>scm:git:https://github.com/yupiik/hop-junit.git</connection>
     <developerConnection>scm:git:https://github.com/yupiik/hop-junit.git</developerConnection>
-    <tag>hop-junit-parent-1.0.1</tag>
+    <tag>HEAD</tag>
     <url>https://github.com/yupiik/hop-junit.git</url>
   </scm>
 
