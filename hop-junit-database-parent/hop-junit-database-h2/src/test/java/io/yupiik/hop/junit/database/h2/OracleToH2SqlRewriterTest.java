@@ -79,6 +79,13 @@ class OracleToH2SqlRewriterTest {
     }
 
     @Test
+    void nestedCryptoHashesAreRewrittenRecursively() {
+        assertEquals(
+                "SELECT HASH('SHA-1', TO_CLOB('x') || HASH('SHA-1', payload)) FROM T",
+                rewriter.apply("SELECT DBMS_CRYPTO.HASH(TO_CLOB('x') || DBMS_CRYPTO.HASH(payload,3),3) FROM T"));
+    }
+
+    @Test
     void dbmsCryptoHashSh256UsesH2Sha256() {
         final var sql = "SELECT DBMS_CRYPTO.HASH(payload, 4) FROM SA.T";
         assertEquals("SELECT HASH('SHA-256', payload) FROM SA.T", rewriter.apply(sql));

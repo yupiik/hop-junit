@@ -109,7 +109,7 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
                         .append("HASH('")
                         .append(digest)
                         .append("', ")
-                        .append(sql, matcher.end(), comma)
+                        .append(rewriteDbmsCryptoHash(sql.substring(matcher.end(), comma)))
                         .append(')');
             }
             last = end;
