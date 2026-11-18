@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.apache.hop.pipeline.Pipeline;
@@ -88,6 +89,9 @@ public final class PipelineCoverageCollector {
 
     public Execution toExecution(final org.apache.hop.core.Result result) {
         final var endedAt = Instant.now();
+        // Our transform-finished listeners can be notified after pipeline completion
+        // or never if the transform already ended before attach (nested pipelines), so snapshot runtime state
+        nodes.values().forEach(NodeState::snapshot);
         final var outgoingEdges = edges.values().stream()
                 .filter(edge -> edge.enabled)
                 .collect(Collectors.groupingBy(edge -> edge.from, Collectors.counting()));
@@ -128,6 +132,7 @@ public final class PipelineCoverageCollector {
 
     private void attach(final TransformMeta meta, final ITransform transform) {
         final var state = nodes.computeIfAbsent(meta.getName(), ignored -> new NodeState(meta));
+        state.runtimeTransforms.add(transform);
         transform.addTransformStartedListener(
                 (pipeline, transformMeta, runtimeTransform) -> state.started(runtimeTransform.getCopy()));
         transform.addTransformFinishedListener((pipeline, transformMeta, runtimeTransform) -> {
@@ -194,11 +199,8 @@ public final class PipelineCoverageCollector {
         private final Integer y;
         private final ConcurrentSkipListSet<Integer> startedCopies = new ConcurrentSkipListSet<>();
         private final ConcurrentSkipListSet<Integer> finishedCopies = new ConcurrentSkipListSet<>();
-        private final AtomicLong linesInput = new AtomicLong();
-        private final AtomicLong linesOutput = new AtomicLong();
-        private final AtomicLong linesRead = new AtomicLong();
-        private final AtomicLong linesWritten = new AtomicLong();
-        private final AtomicLong errors = new AtomicLong();
+        private final Map<Integer, CopyMetrics> copyMetrics = new ConcurrentHashMap<>();
+        private final List<ITransform> runtimeTransforms = new CopyOnWriteArrayList<>();
         private volatile boolean inferred;
 
         private NodeState(final TransformMeta meta) {
@@ -219,11 +221,39 @@ public final class PipelineCoverageCollector {
         }
 
         private void metrics(final ITransform transform) {
-            linesInput.set(transform.getLinesInput());
-            linesOutput.set(transform.getLinesOutput());
-            linesRead.set(transform.getLinesRead());
-            linesWritten.set(transform.getLinesWritten());
-            errors.set(transform.getErrors());
+            // Serialize observations of the same copy, including the reads, so a late listener
+            // cannot overwrite a newer snapshot with metrics read before that snapshot.
+            copyMetrics.compute(
+                    transform.getCopy(),
+                    (copy, previous) -> new CopyMetrics(
+                            transform.getLinesInput(),
+                            transform.getLinesOutput(),
+                            transform.getLinesRead(),
+                            transform.getLinesWritten(),
+                            transform.getErrors()));
+        }
+
+        private void snapshot() {
+            for (final var transform : runtimeTransforms) {
+                final var status = transform.getStatus();
+                if (status == null) {
+                    continue;
+                }
+                switch (status) {
+                    case STATUS_EMPTY, STATUS_INIT, STATUS_IDLE -> {
+                        // not started
+                    }
+                    case STATUS_FINISHED, STATUS_STOPPED, STATUS_DISPOSED, STATUS_HALTED -> {
+                        startedCopies.add(transform.getCopy());
+                        finishedCopies.add(transform.getCopy());
+                        metrics(transform);
+                    }
+                    default -> {
+                        startedCopies.add(transform.getCopy());
+                        metrics(transform);
+                    }
+                }
+            }
         }
 
         private void inferred() {
@@ -235,7 +265,7 @@ public final class PipelineCoverageCollector {
         }
 
         private boolean wroteRows() {
-            return linesWritten.get() > 0 || linesOutput.get() > 0;
+            return copyMetrics.values().stream().anyMatch(it -> it.linesWritten() > 0 || it.linesOutput() > 0);
         }
 
         private boolean duplicatesRows() {
@@ -247,21 +277,16 @@ public final class PipelineCoverageCollector {
         }
 
         private boolean readRows() {
-            return linesRead.get() > 0 || linesInput.get() > 0;
+            return copyMetrics.values().stream().anyMatch(it -> it.linesRead() > 0 || it.linesInput() > 0);
         }
 
         private boolean isCovered() {
-            return inferred
-                    || !startedCopies.isEmpty()
-                    || !finishedCopies.isEmpty()
-                    || linesInput.get() > 0
-                    || linesOutput.get() > 0
-                    || linesRead.get() > 0
-                    || linesWritten.get() > 0;
+            return inferred || !startedCopies.isEmpty() || !finishedCopies.isEmpty() || processedRows();
         }
 
         private Node toNode() {
             final var covered = isCovered();
+            final var metrics = List.copyOf(copyMetrics.values());
             return new Node(
                     "transform:" + name,
                     name,
@@ -273,11 +298,11 @@ public final class PipelineCoverageCollector {
                     Math.max(1, Math.max(startedCopies.size(), finishedCopies.size())),
                     List.copyOf(startedCopies),
                     List.copyOf(finishedCopies),
-                    linesInput.get(),
-                    linesOutput.get(),
-                    linesRead.get(),
-                    linesWritten.get(),
-                    errors.get(),
+                    metrics.stream().mapToLong(CopyMetrics::linesInput).sum(),
+                    metrics.stream().mapToLong(CopyMetrics::linesOutput).sum(),
+                    metrics.stream().mapToLong(CopyMetrics::linesRead).sum(),
+                    metrics.stream().mapToLong(CopyMetrics::linesWritten).sum(),
+                    metrics.stream().mapToLong(CopyMetrics::errors).sum(),
                     null);
         }
 
@@ -285,6 +310,8 @@ public final class PipelineCoverageCollector {
         public int compareTo(final NodeState other) {
             return name.compareTo(other.name);
         }
+
+        private record CopyMetrics(long linesInput, long linesOutput, long linesRead, long linesWritten, long errors) {}
     }
 
     private static final class EdgeState implements Comparable<EdgeState> {
