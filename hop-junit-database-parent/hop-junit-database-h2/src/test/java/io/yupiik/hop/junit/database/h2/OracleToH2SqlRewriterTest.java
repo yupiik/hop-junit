@@ -168,4 +168,16 @@ class OracleToH2SqlRewriterTest {
                 + "Q'{don't rewrite DBMS_CRYPTO.HASH(x,4)}' FROM dual";
         assertSame(sql, rewriter.apply(sql));
     }
+
+    @Test
+    void routesNumericNlsToCharToTheShim() {
+        final var sql = "SELECT TO_CHAR(N, 'TM9', 'NLS_NUMERIC_CHARACTERS=''.,''') AS V FROM T";
+        assertEquals("SELECT TO_CHAR_NLS(N, 'TM9', 'NLS_NUMERIC_CHARACTERS=''.,''') AS V FROM T", rewriter.apply(sql));
+    }
+
+    @Test
+    void keepsToCharWithoutNlsArgument() {
+        final var sql = "SELECT TO_CHAR(N, 'TM9') FROM T";
+        assertSame(sql, rewriter.apply(sql));
+    }
 }

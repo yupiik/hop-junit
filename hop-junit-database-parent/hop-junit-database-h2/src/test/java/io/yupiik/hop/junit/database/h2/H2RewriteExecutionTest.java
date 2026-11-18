@@ -253,4 +253,26 @@ class H2RewriteExecutionTest {
             }
         }
     }
+
+    @Test
+    void toCharTextMinimumFormatMatchesOracle() throws Exception {
+        try (final var connection = DriverManager.getConnection(
+                        driver.wrap("jdbc:h2:mem:tm9;MODE=Oracle;DATABASE_TO_UPPER=true"), "sa", "");
+                final var statement = connection.createStatement()) {
+            statement.execute(
+                    "CREATE ALIAS TO_CHAR_NLS FOR 'io.yupiik.hop.junit.database.h2.H2OracleExtendedShims.TO_CHAR_NLS'");
+            try (final var result = statement.executeQuery("SELECT "
+                    + "TO_CHAR(12.5, 'TM9'), "
+                    + "TO_CHAR(-0.5, 'TM9'), "
+                    + "TO_CHAR(12345678901234567890123456789012345678, 'TM9', 'NLS_NUMERIC_CHARACTERS=''.,'''), "
+                    + "TO_CHAR(1234.5, '9G999D99', 'NLS_NUMERIC_CHARACTERS='',.''') "
+                    + "FROM DUAL")) {
+                assertTrue(result.next());
+                assertEquals("12.5", result.getString(1));
+                assertEquals("-0.5", result.getString(2));
+                assertEquals("12345678901234567890123456789012345678", result.getString(3));
+                assertEquals(" 1.234,50", result.getString(4));
+            }
+        }
+    }
 }

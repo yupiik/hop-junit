@@ -22,7 +22,8 @@ import java.util.regex.Pattern;
 
 /**
  * Rewrites a subset of Oracle SQL/RQL that in-memory H2 cannot execute natively (partition clauses,
- * CONNECT BY code fences, XMLAGG aggregation, DBMS_CRYPTO.HASH, TRUNC(SYSDATE) arithmetic, ROWID
+ * Oracle-only DDL clauses (see {@link OracleDdlRewriter}), CONNECT BY code fences, XMLAGG aggregation,
+ * DBMS_CRYPTO.HASH, TRUNC(SYSDATE) arithmetic, ROWID
  * band-split predicates and test dictionary-view shims) into H2 SQL. Partition clauses are
  * removed because H2 fixture tables are not partitioned; they do not filter rows.
  */
@@ -34,11 +35,13 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
     private static final Pattern ROWID_TO_CHAR_WITH_ROWID = Pattern.compile(
             "(?i)\\bROWIDTOCHAR\\s*\\(\\s*(?:([A-Z0-9_$#]+|\"(?:[^\"]|\"\")+\")\\s*\\.\\s*)?ROWID\\s*\\)");
     private static final Pattern HASH = Pattern.compile("(?i)\\bDBMS_CRYPTO\\s*\\.\\s*HASH\\s*\\(");
+    private static final Pattern TO_CHAR = Pattern.compile("(?i)\\bTO_CHAR\\s*\\(");
     private static final Pattern RAWTOHEX = Pattern.compile("(?i)\\bRAWTOHEX\\s*\\(");
     private static final Pattern CAST_TO_RAW = Pattern.compile("(?i)\\bUTL_RAW\\s*\\.\\s*CAST_TO_RAW\\s*\\(");
     private static final OracleDateArithmetic DATE_ARITHMETIC_REWRITER = new OracleDateArithmetic();
     private static final OracleHierarchyRewriter HIERARCHY_REWRITER = new OracleHierarchyRewriter();
     private static final OracleXmlAggregationRewriter XML_AGGREGATION_REWRITER = new OracleXmlAggregationRewriter();
+    private static final OracleDdlRewriter DDL_REWRITER = new OracleDdlRewriter();
 
     public OracleToH2SqlRewriter() {
         // no-op
@@ -51,7 +54,7 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
             return sql;
         }
         final var upper = codeOnly(sql).toUpperCase(Locale.ROOT);
-        var rewritten = DATE_ARITHMETIC_REWRITER.rewrite(sql);
+        var rewritten = DATE_ARITHMETIC_REWRITER.rewrite(DDL_REWRITER.rewrite(sql));
         if (upper.contains("UTL_RAW")) {
             rewritten = replaceCode(rewritten, CAST_TO_RAW, matcher -> "STRINGTOUTF8(");
         }
@@ -60,6 +63,9 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
         }
         if (upper.contains("DBMS_CRYPTO")) {
             rewritten = rewriteDbmsCryptoHash(rewritten);
+        }
+        if (upper.contains("TO_CHAR") && sql.toUpperCase(Locale.ROOT).contains("NLS_NUMERIC_CHARACTERS")) {
+            rewritten = rewriteToCharNls(rewritten);
         }
         if (upper.contains("RAWTOHEX")) {
             rewritten = rewriteRawToHex(rewritten);
@@ -111,6 +117,45 @@ public class OracleToH2SqlRewriter implements Function<String, String> {
                         .append("', ")
                         .append(rewriteDbmsCryptoHash(sql.substring(matcher.end(), comma)))
                         .append(')');
+            }
+            last = end;
+        }
+        return last == 0 ? sql : out.append(sql, last, sql.length()).toString();
+    }
+
+    // TO_CHAR(x, fmt, 'NLS_...') -> TO_CHAR_NLS(x, fmt, 'NLS_...'): H2 ignores the NLS argument
+    private String rewriteToCharNls(final String sql) {
+        final var code = codeOnly(sql);
+        final var matcher = TO_CHAR.matcher(code);
+        final var out = new StringBuilder(sql.length());
+        var last = 0;
+        while (matcher.find(last)) {
+            var depth = 1;
+            var commas = 0;
+            var lastComma = -1;
+            var end = matcher.end();
+            for (; end < code.length() && depth > 0; end++) {
+                final var c = code.charAt(end);
+                if (c == '(') {
+                    depth++;
+                } else if (c == ')') {
+                    depth--;
+                } else if (c == ',' && depth == 1) {
+                    commas++;
+                    lastComma = end;
+                }
+            }
+            if (depth != 0) {
+                break;
+            }
+            out.append(sql, last, matcher.start());
+            // only numeric NLS settings are emulated (dates keep the native H2 TO_CHAR)
+            if (commas == 2
+                    && sql.substring(lastComma, end).toUpperCase(Locale.ROOT).contains("NLS_NUMERIC_CHARACTERS")) {
+                out.append("TO_CHAR_NLS(").append(rewriteToCharNls(sql.substring(matcher.end(), end)));
+            } else {
+                out.append(sql, matcher.start(), matcher.end())
+                        .append(rewriteToCharNls(sql.substring(matcher.end(), end)));
             }
             last = end;
         }

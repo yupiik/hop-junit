@@ -15,9 +15,11 @@
  */
 package io.yupiik.hop.junit.database.h2;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.regex.Pattern;
+import org.h2.expression.function.ToCharFunction;
 
 /**
  * The Oracle-emulation SQL functions installed by {@link H2DatabaseExtension} when a database runs in
@@ -29,6 +31,8 @@ import java.util.regex.Pattern;
  * "class.method"} resolution mechanism, not a framework static-utility API.
  */
 public class H2OracleExtendedShims {
+    private static final Pattern NLS_NUMERIC_CHARACTERS = Pattern.compile("(?i)NLS_NUMERIC_CHARACTERS\\s*=\\s*'?(..)");
+
     public H2OracleExtendedShims() {
         // no-op
     }
@@ -65,6 +69,38 @@ public class H2OracleExtendedShims {
             throw new IllegalArgumentException("ORA_HASH max bucket must be non-negative");
         }
         return (int) (hash % ((long) maxBucket + 1));
+    }
+
+    /**
+     * Oracle {@code TO_CHAR(number, format, 'NLS_NUMERIC_CHARACTERS=''dg''')}: H2 ignores the NLS
+     * parameter and uses the JVM locale for {@code D}/{@code G}, so the rewriter routes the three
+     * arguments flavor here and the separators are applied explicitly.
+     */
+    public static String TO_CHAR_NLS(final BigDecimal number, final String format, final String nls) {
+        if (number == null) {
+            return null;
+        }
+        final var matcher = NLS_NUMERIC_CHARACTERS.matcher(nls == null ? "" : nls);
+        final var neutralFormat = format == null
+                ? null
+                : format.replace('D', '.').replace('d', '.').replace('G', ',').replace('g', ',');
+        final var formatted = ToCharFunction.toChar(number, neutralFormat, null);
+        if (!matcher.find()) {
+            return formatted;
+        }
+        final var decimal = matcher.group(1).charAt(0);
+        final var grouping = matcher.group(1).charAt(1);
+        final var out = new StringBuilder(formatted.length());
+        for (final var c : formatted.toCharArray()) {
+            if (c == '.') {
+                out.append(decimal);
+            } else if (c == ',') {
+                out.append(grouping);
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     public static String TO_CLOB(final String value) {

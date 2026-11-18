@@ -32,7 +32,10 @@ import java.util.List;
  *       {@code ALL_TAB_COLUMNS}, {@code ALL_CONSTRAINTS}). These are installed as real H2
  *       <em>views</em> over {@code INFORMATION_SCHEMA} so they always reflect the actual schema:
  *       real base tables plus synonyms (an {@code SA.X FOR PUBLIC.X} synonym is reported under
- *       owner {@code SA}). No consumer seeding is required.</li>
+ *       owner {@code SA}). No consumer seeding is required. {@code ALL_SEQUENCES},
+ *       {@code ALL_SYNONYMS}, {@code ALL_VIEWS} and the {@code USER_TABLES}, {@code USER_TAB_COLUMNS},
+ *       {@code USER_SEQUENCES}, {@code USER_SYNONYMS} views (filtered on {@code CURRENT_SCHEMA}) are
+ *       also provided, they are what the Hop Oracle dialect queries (sequence existence for example).</li>
  *   <li><b>Partitioning/app metadata</b> ({@code ALL_TAB_PARTITIONS}, {@code ALL_PART_TABLES},
  *       {@code ALL_PART_KEY_COLUMNS}, {@code ALL_PART_INDEXES}, {@code ALL_IND_PARTITIONS} and
  *       their {@code USER_*} counterparts). H2 cannot represent Oracle partitioning, so these are
@@ -91,6 +94,27 @@ public final class OracleDictionaryEmulation {
                         + "FROM " + schemaKey() + " K "
                         + "JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS TC "
                         + "  ON TC.TABLE_SCHEMA = K.UNDER_SCHEMA AND TC.TABLE_NAME = K.UNDER_NAME",
+                "CREATE OR REPLACE VIEW ALL_SEQUENCES AS "
+                        + "SELECT S.SEQUENCE_SCHEMA AS SEQUENCE_OWNER, S.SEQUENCE_NAME, "
+                        + "  S.MINIMUM_VALUE AS MIN_VALUE, S.MAXIMUM_VALUE AS MAX_VALUE, S.INCREMENT AS INCREMENT_BY, "
+                        + "  CASE WHEN S.CYCLE_OPTION = 'YES' THEN 'Y' ELSE 'N' END AS CYCLE_FLAG, "
+                        + "  'N' AS ORDER_FLAG, S.CACHE AS CACHE_SIZE, S.BASE_VALUE AS LAST_NUMBER "
+                        + "FROM INFORMATION_SCHEMA.SEQUENCES S WHERE S.SEQUENCE_SCHEMA <> 'INFORMATION_SCHEMA'",
+                "CREATE OR REPLACE VIEW ALL_SYNONYMS AS "
+                        + "SELECT S.SYNONYM_SCHEMA AS OWNER, S.SYNONYM_NAME, S.SYNONYM_FOR_SCHEMA AS TABLE_OWNER, "
+                        + "  S.SYNONYM_FOR AS TABLE_NAME, CAST(NULL AS VARCHAR(128)) AS DB_LINK "
+                        + "FROM INFORMATION_SCHEMA.SYNONYMS S WHERE S.SYNONYM_SCHEMA <> 'INFORMATION_SCHEMA'",
+                "CREATE OR REPLACE VIEW ALL_VIEWS AS "
+                        + "SELECT V.TABLE_SCHEMA AS OWNER, V.TABLE_NAME AS VIEW_NAME, V.VIEW_DEFINITION AS TEXT "
+                        + "FROM INFORMATION_SCHEMA.VIEWS V WHERE V.TABLE_SCHEMA <> 'INFORMATION_SCHEMA'",
+                "CREATE OR REPLACE VIEW USER_TABLES AS SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = CURRENT_SCHEMA",
+                "CREATE OR REPLACE VIEW USER_TAB_COLUMNS AS "
+                        + "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_ID, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE OWNER = CURRENT_SCHEMA",
+                "CREATE OR REPLACE VIEW USER_SEQUENCES AS "
+                        + "SELECT SEQUENCE_NAME, MIN_VALUE, MAX_VALUE, INCREMENT_BY, CYCLE_FLAG, ORDER_FLAG, CACHE_SIZE, "
+                        + "LAST_NUMBER FROM ALL_SEQUENCES WHERE SEQUENCE_OWNER = CURRENT_SCHEMA",
+                "CREATE OR REPLACE VIEW USER_SYNONYMS AS "
+                        + "SELECT SYNONYM_NAME, TABLE_OWNER, TABLE_NAME, DB_LINK FROM ALL_SYNONYMS WHERE OWNER = CURRENT_SCHEMA",
                 // ---- partitioning / app-metadata scaffold tables ----
                 "CREATE TABLE IF NOT EXISTS ALL_TAB_PARTITIONS ("
                         + "TABLE_OWNER VARCHAR2(128) NOT NULL, "

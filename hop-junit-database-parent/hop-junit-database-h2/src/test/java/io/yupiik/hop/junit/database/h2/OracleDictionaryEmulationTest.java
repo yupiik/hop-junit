@@ -73,6 +73,40 @@ class OracleDictionaryEmulationTest {
     }
 
     @Test
+    void reflectsSequencesSynonymsViewsAndUserViews() throws Exception {
+        try (final var c = DriverManager.getConnection(
+                        "jdbc:h2:mem:dictseq;MODE=Oracle;DATABASE_TO_UPPER=true", "sa", "");
+                final var s = c.createStatement()) {
+            s.execute("CREATE SCHEMA LAB");
+            s.execute("CREATE TABLE PUBLIC.ITEMS(ID NUMBER(10), LABEL VARCHAR2(10))");
+            s.execute("CREATE SEQUENCE PUBLIC.ITEMS_SEQ START WITH 5 INCREMENT BY 2 NOCACHE");
+            s.execute("CREATE SEQUENCE LAB.OTHER_SEQ");
+            s.execute("CREATE SYNONYM LAB.ITEMS FOR PUBLIC.ITEMS");
+            s.execute("CREATE VIEW PUBLIC.ITEM_LABELS AS SELECT LABEL FROM PUBLIC.ITEMS");
+            OracleDictionaryEmulation.install(c);
+
+            // the Hop Oracle dialect checks sequence existence through USER_SEQUENCES/ALL_SEQUENCES
+            assertRows(s, "SELECT SEQUENCE_NAME, INCREMENT_BY, CYCLE_FLAG FROM USER_SEQUENCES", "[ITEMS_SEQ, 2, N]");
+            assertRows(
+                    s,
+                    "SELECT SEQUENCE_OWNER, SEQUENCE_NAME FROM ALL_SEQUENCES ORDER BY SEQUENCE_OWNER",
+                    "[LAB, OTHER_SEQ]",
+                    "[PUBLIC, ITEMS_SEQ]");
+            assertRows(
+                    s,
+                    "SELECT OWNER, SYNONYM_NAME, TABLE_OWNER, TABLE_NAME FROM ALL_SYNONYMS",
+                    "[LAB, ITEMS, PUBLIC, ITEMS]");
+            assertRows(s, "SELECT TABLE_NAME FROM USER_TABLES", "[ITEMS]");
+            assertRows(
+                    s,
+                    "SELECT COLUMN_NAME, DATA_TYPE FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'ITEMS' ORDER BY COLUMN_ID",
+                    "[ID, NUMBER]",
+                    "[LABEL, VARCHAR2]");
+            assertTrue(hasRow(s, "SELECT TEXT FROM ALL_VIEWS WHERE VIEW_NAME = 'ITEM_LABELS' AND OWNER = 'PUBLIC'"));
+        }
+    }
+
+    @Test
     void installIsIdempotent() throws Exception {
         try (final var c = DriverManager.getConnection("jdbc:h2:mem:dictidem;MODE=Oracle", "sa", "");
                 final var s = c.createStatement()) {
