@@ -65,6 +65,19 @@ public class H2VerifyFixtures {
         // init scripts and datasets go through the Oracle rewrites: LONG is text, TABLESPACE is ignored
     }
 
+    @Test
+    @H2Database(
+            name = "DB",
+            init = {@DbInit("h2-verify/people.sql")},
+            expected = {@DbExpected(value = "h2-verify/matching.yml", comparison = DbComparison.STRICT)})
+    void schemaQualifiedSqlUsesExposedSchema(@JdbcNamed("DB") final JdbcConnectionSpec spec) throws Exception {
+        // the exposed schema owns the unqualified fixture tables, as an Oracle user schema does
+        try (var connection = DriverManager.getConnection(spec.jdbcUrl(), spec.username(), spec.password());
+                var statement = connection.createStatement()) {
+            statement.execute("INSERT INTO " + spec.schema() + ".PEOPLE VALUES (1, 'Alice')");
+        }
+    }
+
     private static void insertAlice(final JdbcConnectionSpec spec) throws Exception {
         try (var connection = DriverManager.getConnection(spec.jdbcUrl(), spec.username(), spec.password());
                 var statement = connection.createStatement()) {

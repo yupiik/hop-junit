@@ -46,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
  */
 public class H2DatabaseExtension extends BaseDatabaseExtension {
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^A-Za-z0-9_]");
+    private static final String DEFAULT_SCHEMA = "PUBLIC";
 
     private final H2SqlRewriteDriver rewriteDriver = registeredRewriteDriver();
     private final DbUnitEngine engine = new DbUnitEngine();
@@ -119,7 +120,9 @@ public class H2DatabaseExtension extends BaseDatabaseExtension {
                 : jdbcUrl;
         // fixtures (init scripts, datasets) share the Oracle rewrites applied to the Hop connection
         final var connection = DriverManager.getConnection(hopJdbcUrl, "sa", "");
-        final var spec = new JdbcConnectionSpec(database.name(), "sa", "", hopJdbcUrl, DatabaseImplementation.H2, null);
+        // unqualified DDL lands in H2's default schema: expose it so schema-qualified SQL works as on Oracle
+        final var spec = new JdbcConnectionSpec(
+                database.name(), "sa", "", hopJdbcUrl, DatabaseImplementation.H2, DEFAULT_SCHEMA);
         if (resolveMode(database.specificData()) == H2DatabaseMode.ORACLE_EXTENDED) {
             registerOracleExtendedShims(connection, H2DatabaseMode.ORACLE_EXTENDED);
             OracleDictionaryEmulation.install(connection);

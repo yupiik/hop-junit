@@ -47,6 +47,8 @@ class H2DatabaseVerifyTest {
                 .haveExactly(1, event(test("verifyRunsAndPasses"), finishedSuccessfully()))
                 // Oracle DDL and a LONG text dataset seed through the rewriting connection
                 .haveExactly(1, event(test("oracleDdlAndDatasetSeedThroughRewrites"), finishedSuccessfully()))
+                // the exposed schema qualifies the fixture tables (PUBLIC.PEOPLE)
+                .haveExactly(1, event(test("schemaQualifiedSqlUsesExposedSchema"), finishedSuccessfully()))
                 // mismatching expected dataset must fail: proof verifyDataset ran
                 .haveExactly(
                         1, event(test("verifyRunsAndFails"), finishedWithFailure(message(it -> it.contains("Zed")))));

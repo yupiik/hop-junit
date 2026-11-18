@@ -25,7 +25,7 @@ package io.yupiik.hop.junit.database;
  * @param password the connection password
  * @param jdbcUrl the JDBC URL (plain, in-memory H2 URL for H2; container URL for Oracle)
  * @param implementation the engine (H2 or ORACLE), drives {@link #databaseTypeName()}
- * @param schema the schema (SRC, TGT, ...) backed by this named connection (Oracle); null on H2
+ * @param schema the schema (SRC, TGT, ...) backed by this named connection (Oracle), {@code PUBLIC} on H2
  */
 public record JdbcConnectionSpec(
         String name,
