@@ -103,6 +103,10 @@ public class H2OracleExtendedShims {
         return out.toString();
     }
 
+    public static byte[] TO_BLOB(final byte[] value) {
+        return value;
+    }
+
     public static String TO_CLOB(final String value) {
         return value;
     }

@@ -56,6 +56,15 @@ public class H2VerifyFixtures {
         // the test body passes; the post-test verification against mismatching.yml must fail
     }
 
+    @Test
+    @H2Database(
+            name = "DB",
+            init = {@DbInit("h2-verify/oracle-ddl.sql"), @DbInit("h2-verify/legacy.yml")},
+            expected = {@DbExpected(value = "h2-verify/legacy.yml", comparison = DbComparison.STRICT)})
+    void oracleDdlAndDatasetSeedThroughRewrites(@JdbcNamed("DB") final JdbcConnectionSpec spec) {
+        // init scripts and datasets go through the Oracle rewrites: LONG is text, TABLESPACE is ignored
+    }
+
     private static void insertAlice(final JdbcConnectionSpec spec) throws Exception {
         try (var connection = DriverManager.getConnection(spec.jdbcUrl(), spec.username(), spec.password());
                 var statement = connection.createStatement()) {

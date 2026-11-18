@@ -15,6 +15,7 @@
  */
 package io.yupiik.hop.junit.database.h2;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -259,6 +260,12 @@ class H2RewriteExecutionTest {
         try (final var connection = DriverManager.getConnection(
                         driver.wrap("jdbc:h2:mem:tm9;MODE=Oracle;DATABASE_TO_UPPER=true"), "sa", "");
                 final var statement = connection.createStatement()) {
+            statement.execute(
+                    "CREATE ALIAS TO_BLOB FOR 'io.yupiik.hop.junit.database.h2.H2OracleExtendedShims.TO_BLOB'");
+            try (final var result = statement.executeQuery("SELECT TO_BLOB(HEXTORAW('0A0B')) FROM DUAL")) {
+                assertTrue(result.next());
+                assertArrayEquals(new byte[] {10, 11}, result.getBytes(1));
+            }
             statement.execute(
                     "CREATE ALIAS TO_CHAR_NLS FOR 'io.yupiik.hop.junit.database.h2.H2OracleExtendedShims.TO_CHAR_NLS'");
             try (final var result = statement.executeQuery("SELECT "

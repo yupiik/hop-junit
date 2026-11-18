@@ -114,10 +114,11 @@ public class H2DatabaseExtension extends BaseDatabaseExtension {
         final var safeName = NON_ALPHANUMERIC.matcher(context.getUniqueId()).replaceAll("_") + "_" + database.name();
         final var suffix = options.isBlank() ? ";DB_CLOSE_DELAY=-1" : ";" + options + ";DB_CLOSE_DELAY=-1";
         final var jdbcUrl = "jdbc:h2:mem:" + safeName + suffix;
-        final var connection = DriverManager.getConnection(jdbcUrl, "sa", "");
         final var hopJdbcUrl = resolveMode(database.specificData()) == H2DatabaseMode.ORACLE_EXTENDED
                 ? rewriteDriver.wrap(jdbcUrl)
                 : jdbcUrl;
+        // fixtures (init scripts, datasets) share the Oracle rewrites applied to the Hop connection
+        final var connection = DriverManager.getConnection(hopJdbcUrl, "sa", "");
         final var spec = new JdbcConnectionSpec(database.name(), "sa", "", hopJdbcUrl, DatabaseImplementation.H2, null);
         if (resolveMode(database.specificData()) == H2DatabaseMode.ORACLE_EXTENDED) {
             registerOracleExtendedShims(connection, H2DatabaseMode.ORACLE_EXTENDED);

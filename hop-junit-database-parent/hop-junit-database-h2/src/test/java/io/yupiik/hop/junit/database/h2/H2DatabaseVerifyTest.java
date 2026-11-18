@@ -45,6 +45,8 @@ class H2DatabaseVerifyTest {
                 .assertThatEvents()
                 // matching expected dataset + seeded state passes
                 .haveExactly(1, event(test("verifyRunsAndPasses"), finishedSuccessfully()))
+                // Oracle DDL and a LONG text dataset seed through the rewriting connection
+                .haveExactly(1, event(test("oracleDdlAndDatasetSeedThroughRewrites"), finishedSuccessfully()))
                 // mismatching expected dataset must fail: proof verifyDataset ran
                 .haveExactly(
                         1, event(test("verifyRunsAndFails"), finishedWithFailure(message(it -> it.contains("Zed")))));
