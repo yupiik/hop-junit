@@ -1,5 +1,8 @@
 = Hop JUnit
 
+image:https://img.shields.io/maven-central/v/io.yupiik.hop.junit/hop-junit-core.svg[Maven Central,link=https://central.sonatype.com/artifact/io.yupiik.hop.junit/hop-junit-core]
+image:https://github.com/yupiik/hop-junit/actions/workflows/build.yml/badge.svg?branch=main[CI,link=https://github.com/yupiik/hop-junit/actions/workflows/build.yml?query=branch%3Amain]
+
 JUnit 5 extension framework to test https://hop.apache.org[Apache Hop] pipelines and workflows, with
 an engine-agnostic database facade: seed and verify an in-memory H2 database by default, or a real
 Oracle 23ai Free Testcontainers container behind a `-Poracle` Maven profile.
@@ -41,20 +44,22 @@ mvn -pl hop-junit-documentation yupiik-tools:serve-minisite@minisite
 == Using it in your project (consumer view)
 
 Add `hop-junit-core` plus the database api/core and the H2 backend to your test classpath; the
-default implementation is H2, selected from `database.default.implementation`:
+default implementation is H2, selected from `database.default.implementation`.
+
+Define the `hop-junit.version` Maven property in your project's `<properties>` using the release shown by the Maven Central badge above, and use the same version for all Hop JUnit modules.
 
 [source,xml]
 ----
 <dependency>
   <groupId>io.yupiik.hop.junit</groupId>
   <artifactId>hop-junit-core</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>${hop-junit.version}</version>
   <scope>test</scope>
 </dependency>
 <dependency>
   <groupId>io.yupiik.hop.junit</groupId>
   <artifactId>hop-junit-database-h2</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>${hop-junit.version}</version>
   <scope>test</scope>
 </dependency>
 ----
