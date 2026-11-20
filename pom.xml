@@ -84,7 +84,7 @@
     <dbunit.version>3.5.2</dbunit.version>
     <snakeyaml.version>2.7</snakeyaml.version>
     <jackson.version>2.22.4</jackson.version>
-    <poi.version>5.5.1</poi.version>
+    <poi.version>6.0.0</poi.version>
     <hop.version>2.20.0</hop.version>
     <testcontainers.version>1.21.4</testcontainers.version>
     <ojdbc.version>23.9.0.25.07</ojdbc.version>
