@@ -24,6 +24,23 @@ import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Coverage collection and reporting settings, loaded from JVM system properties by {@link #load()}.
+ *
+ * @param enabled whether coverage collection and reporting are enabled
+ * @param baseDir base directory for artifact paths
+ * @param workDir working directory for coverage data
+ * @param rawDir directory containing per-JVM raw reports
+ * @param siteDir directory for rendered reports
+ * @param failOnWriteError whether report write failures, including JaCoCo export failures, fail the build
+ * @param failOnMalformedReport whether malformed raw reports fail the build
+ * @param requiredCoverage default required coverage percentage
+ * @param requiredCoverageByArtifact required coverage overrides keyed by artifact name
+ * @param reportFormats explicitly enabled report formats
+ * @param htmlReport HTML report settings
+ * @param adocReport AsciiDoc report settings
+ * @param jacocoReport JaCoCo XML export settings; an output path alone does not enable the format
+ */
 public record HopCoverageConfig(
         boolean enabled,
         Path baseDir,
@@ -36,9 +53,54 @@ public record HopCoverageConfig(
         Map<String, Double> requiredCoverageByArtifact,
         Set<ReportFormat> reportFormats,
         HtmlReport htmlReport,
-        AdocReport adocReport) {
+        AdocReport adocReport,
+        JacocoReport jacocoReport) {
+    /**
+     * Preserves the constructor predating JaCoCo export settings.
+     * The JaCoCo output defaults to {@code siteDir/jacoco.xml}; enabled formats are unchanged.
+     */
+    public HopCoverageConfig(
+            final boolean enabled,
+            final Path baseDir,
+            final Path workDir,
+            final Path rawDir,
+            final Path siteDir,
+            final boolean failOnWriteError,
+            final boolean failOnMalformedReport,
+            final OptionalDouble requiredCoverage,
+            final Map<String, Double> requiredCoverageByArtifact,
+            final Set<ReportFormat> reportFormats,
+            final HtmlReport htmlReport,
+            final AdocReport adocReport) {
+        this(
+                enabled,
+                baseDir,
+                workDir,
+                rawDir,
+                siteDir,
+                failOnWriteError,
+                failOnMalformedReport,
+                requiredCoverage,
+                requiredCoverageByArtifact,
+                reportFormats,
+                htmlReport,
+                adocReport,
+                new JacocoReport(siteDir.resolve("jacoco.xml")));
+    }
+
+    /**
+     * Loads settings from {@code hop.coverage.*} system properties.
+     * The default formats remain JSON, HTML and ADOC; add JACOCO to {@code hop.coverage.report.format}
+     * to export XML. Its optional {@code hop.coverage.report.jacoco.output} defaults to
+     * {@code siteDir/jacoco.xml} and must not be blank when explicitly set.
+     * Existing directory and AsciiDoc output defaults are independent of this new output setting.
+     *
+     * @return the resolved configuration, with loaded paths absolute and normalized
+     * @throws IllegalArgumentException if a format, language, number or explicit JaCoCo output is invalid
+     */
     public static HopCoverageConfig load() {
         final var workDir = path("hop.coverage.workDir", "target/hop-coverage");
+        final var siteDir = path("hop.coverage.siteDir", "target/hop-coverage/report");
         return new HopCoverageConfig(
                 bool("hop.coverage.enabled", true),
                 path(
@@ -46,7 +108,7 @@ public record HopCoverageConfig(
                         Path.of(".").toAbsolutePath().normalize().toString()),
                 workDir,
                 path("hop.coverage.rawDir", workDir.resolve("raw").toString()),
-                path("hop.coverage.siteDir", "target/hop-coverage/report"),
+                siteDir,
                 bool("hop.coverage.failOnWriteError", true),
                 bool("hop.coverage.failOnMalformedReport", true),
                 optionalDouble("hop.coverage.requiredCoverage"),
@@ -71,7 +133,8 @@ public record HopCoverageConfig(
                         bool("hop.coverage.report.adoc.enableMinisiteHopLinking", false),
                         language(
                                 "hop.coverage.report.adoc.language",
-                                "fr".equalsIgnoreCase(Locale.getDefault().getLanguage()) ? Language.FR : Language.EN)));
+                                "fr".equalsIgnoreCase(Locale.getDefault().getLanguage()) ? Language.FR : Language.EN)),
+                new JacocoReport(jacocoOutput(siteDir)));
     }
 
     public boolean isReportFormatEnabled(final ReportFormat format) {
@@ -107,6 +170,15 @@ public record HopCoverageConfig(
         return Path.of(System.getProperty(name, defaultValue)).toAbsolutePath().normalize();
     }
 
+    private static Path jacocoOutput(final Path siteDir) {
+        final var property = "hop.coverage.report.jacoco.output";
+        final var value = System.getProperty(property);
+        if (value != null && value.isBlank()) {
+            throw new IllegalArgumentException("Blank output path for property " + property);
+        }
+        return path(property, siteDir.resolve("jacoco.xml").toString());
+    }
+
     private static String string(final String name, final String defaultValue) {
         return System.getProperty(name, defaultValue);
     }
@@ -140,10 +212,13 @@ public record HopCoverageConfig(
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /** Report formats enabled through {@code hop.coverage.report.format}. */
     public enum ReportFormat {
         JSON,
         HTML,
-        ADOC
+        ADOC,
+        /** JaCoCo-compatible XML representing Hop graph edges, not Java code coverage. */
+        JACOCO
     }
 
     public enum Language {
@@ -155,4 +230,11 @@ public record HopCoverageConfig(
 
     public record AdocReport(
             Path output, String title, String description, boolean enableMinisiteHopLinking, Language language) {}
+
+    /**
+     * JaCoCo-compatible XML export settings, independent of format selection.
+     *
+     * @param output XML destination, defaulting to {@code siteDir/jacoco.xml} when loaded
+     */
+    public record JacocoReport(Path output) {}
 }

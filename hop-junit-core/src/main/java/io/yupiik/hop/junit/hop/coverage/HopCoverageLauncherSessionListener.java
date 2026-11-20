@@ -43,6 +43,10 @@ public final class HopCoverageLauncherSessionListener implements LauncherSession
         }
         try {
             new HopCoveragePostProcessor(HopCoverageRuntime.INSTANCE.config()).run();
+        } catch (final HopCoveragePostProcessor.CoverageThresholdException error) {
+            throw error;
+        } catch (final HopCoveragePostProcessor.MalformedReportIOException error) {
+            throw new IllegalStateException(error);
         } catch (final RuntimeException | IOException error) {
             LOGGER.error("Unable to post-process Hop coverage reports.", error);
             if (HopCoverageRuntime.INSTANCE.config().failOnWriteError()) {

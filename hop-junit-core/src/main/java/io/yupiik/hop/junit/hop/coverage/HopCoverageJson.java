@@ -46,10 +46,11 @@ public final class HopCoverageJson {
     }
 
     public void write(final Object value, final Path path) throws IOException {
-        Files.createDirectories(path.getParent());
-        try (final var writer = Files.newBufferedWriter(path)) {
-            MAPPER.writeValue(writer, value);
-        }
+        HopCoverageFiles.write(path, temporary -> {
+            try (final var writer = Files.newBufferedWriter(temporary)) {
+                MAPPER.writeValue(writer, value);
+            }
+        });
     }
 
     public String toString(final Object value) throws IOException {

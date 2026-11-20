@@ -88,7 +88,7 @@ public final class HopCoveragePostProcessor {
                             }
                         });
             } catch (final MalformedReportException error) {
-                throw new IOException("Malformed Hop coverage report", error.getCause());
+                throw new MalformedReportIOException(error.getCause());
             }
         }
         executions.sort(Comparator.comparing(Execution::id));
@@ -100,18 +100,39 @@ public final class HopCoveragePostProcessor {
                 artifacts,
                 List.copyOf(executions),
                 List.copyOf(warnings));
-        Files.createDirectories(config.siteDir());
-        if (config.isReportFormatEnabled(ReportFormat.JSON)) {
-            HopCoverageJson.INSTANCE.write(report, config.siteDir().resolve("hop-coverage.json"));
-        }
-        if (config.isReportFormatEnabled(ReportFormat.HTML)) {
-            new HopCoverageHtmlRenderer(config).write(report, config.siteDir().resolve("index.html"));
-        }
-        if (config.isReportFormatEnabled(ReportFormat.ADOC)) {
-            new HopCoverageAdocRenderer(config).write(report);
-        }
         log(report);
-        enforce(report);
+        final var errors = new ArrayList<IOException>();
+        for (final var format : ReportFormat.values()) {
+            if (!config.isReportFormatEnabled(format)) {
+                continue;
+            }
+            try {
+                switch (format) {
+                    case JSON ->
+                        HopCoverageJson.INSTANCE.write(report, config.siteDir().resolve("hop-coverage.json"));
+                    case HTML ->
+                        new HopCoverageHtmlRenderer(config)
+                                .write(report, config.siteDir().resolve("index.html"));
+                    case ADOC -> new HopCoverageAdocRenderer(config).write(report);
+                    case JACOCO -> new HopCoverageJacocoRenderer(config).write(report);
+                }
+                LOGGER.info("Hop coverage {} report generated.", format);
+            } catch (final IOException | RuntimeException error) {
+                LOGGER.warn("Unable to write Hop coverage {} report.", format, error);
+                errors.add(new IOException("Unable to write Hop coverage " + format + " report", error));
+            }
+        }
+        try {
+            enforce(report);
+        } catch (final CoverageThresholdException error) {
+            errors.forEach(error::addSuppressed);
+            throw error;
+        }
+        if (config.failOnWriteError() && !errors.isEmpty()) {
+            final var error = errors.getFirst();
+            errors.stream().skip(1).forEach(error::addSuppressed);
+            throw error;
+        }
         return report;
     }
 
@@ -249,6 +270,14 @@ public final class HopCoveragePostProcessor {
     }
 
     private void log(final AggregateReport report) {
+        if (report.artifacts().isEmpty()) {
+            LOGGER.info("Hop Coverage Total: unavailable (no artifacts).");
+        } else {
+            LOGGER.info("Hop Coverage Total: {}", percent(report.summary().coverage()));
+            if (report.summary().coverage().total() == 0) {
+                LOGGER.info("Hop coverage has no enabled edges; the empty graph is fully covered by convention.");
+            }
+        }
         LOGGER.info(
                 "Hop coverage: {} graph scope coverage, {} artifacts, {} executions, nodes {}, edges {}, branches {}.",
                 percent(report.summary().coverage()),
@@ -257,15 +286,6 @@ public final class HopCoveragePostProcessor {
                 percent(report.summary().nodes()),
                 percent(report.summary().edges()),
                 percent(report.summary().branches()));
-        if (config.isReportFormatEnabled(ReportFormat.JSON)) {
-            LOGGER.info("Hop coverage JSON report: {}", config.siteDir().resolve("hop-coverage.json"));
-        }
-        if (config.isReportFormatEnabled(ReportFormat.HTML)) {
-            LOGGER.info("Hop coverage HTML report: {}", config.siteDir().resolve("index.html"));
-        }
-        if (config.isReportFormatEnabled(ReportFormat.ADOC)) {
-            LOGGER.info("Hop coverage Asciidoc report: {}", config.adocReport().output());
-        }
         if (LOGGER.isTraceEnabled()) {
             for (final var artifact : report.artifacts()) {
                 LOGGER.trace(
@@ -292,7 +312,7 @@ public final class HopCoveragePostProcessor {
             }
             final var actual = artifact.summary().coverage().ratio() * 100;
             if (actual < required) {
-                throw new IllegalStateException(String.format(
+                throw new CoverageThresholdException(String.format(
                         Locale.ROOT,
                         "Hop coverage %.2f%% for %s is below required coverage %.2f%%.",
                         actual,
@@ -312,6 +332,19 @@ public final class HopCoveragePostProcessor {
     private static final class MalformedReportException extends RuntimeException {
         private MalformedReportException(final Throwable cause) {
             super(cause);
+        }
+    }
+
+    // Internal exception types let the launcher distinguish policy failures from write errors.
+    static final class CoverageThresholdException extends IllegalStateException {
+        private CoverageThresholdException(final String message) {
+            super(message);
+        }
+    }
+
+    static final class MalformedReportIOException extends IOException {
+        private MalformedReportIOException(final Throwable cause) {
+            super("Malformed Hop coverage report", cause);
         }
     }
 }

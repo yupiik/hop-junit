@@ -135,6 +135,21 @@ not by the database backend, so the two responsibilities stay decoupled.
 
 == Configuration surface
 
+=== Coverage configuration (`HopCoverageConfig`)
+
+`HopCoverageConfig.load()` reads coverage system properties and resolves loaded paths to absolute, normalized paths.
+`reportFormats()` contains the explicitly selected `ReportFormat` values (`JSON`, `HTML`, `ADOC`, `JACOCO`); the default remains `JSON,HTML,ADOC`.
+`jacocoReport()` exposes `JacocoReport(Path output)`, whose loaded output defaults to `siteDir().resolve("jacoco.xml")`.
+The optional `hop.coverage.report.jacoco.output` overrides this path but must not be explicitly blank and does not enable the format.
+Enable XML with `hop.coverage.report.format=JSON,HTML,ADOC,JACOCO` or `JACOCO` alone.
+The previous public constructor without `JacocoReport` remains available and delegates with the same site-relative XML default, preserving the supplied format selection.
+Existing path defaults, including the independent ADOC output default, are unchanged.
+`HopCoverageJacocoRenderer(HopCoverageConfig).write(AggregateReport)` exports the configured XML destination using a temporary sibling and an atomic move where supported (otherwise a replacing move), and throws `IOException` on invalid source mapping or output collisions.
+It maps enabled edges to opening `<hop>` lines using synthetic instruction counters, emits only flat packages/source files with instruction and line counters, and removes its previous output on export failure without deleting colliding sources or other reports.
+JaCoCo XML represents Hop edge graph coverage rather than Java code coverage; see xref:coverage.adoc#_gitlab_coverage[GitLab coverage] for source mapping requirements, strict export failure handling and CI examples.
+
+=== Other settings
+
 [cols="2,1,3", options="header"]
 |===
 |Property |Default |Description

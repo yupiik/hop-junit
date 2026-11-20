@@ -1,7 +1,7 @@
 = Coverage
 :minisite-left-menu-prefix:
 :minisite-index-title: Coverage
-:minisite-index-description: Hop scope coverage: collect what your JUnit executions actually traverse in pipelines and workflows, enforce thresholds, and render JSON/HTML/ADOC reports.
+:minisite-index-description: Hop scope coverage: collect what your JUnit executions actually traverse in pipelines and workflows, enforce thresholds, and render JSON/HTML/ADOC or GitLab-compatible JaCoCo XML reports.
 :minisite-index-icon: fas fa-chart-line
 :minisite-index: 30
 :minisite-breadcrumb: Home[#] > Coverage
@@ -36,15 +36,16 @@ All knobs are system properties, typically set from the surefire plugin:
 |===
 |Property |Default |Description
 |`hop.coverage.enabled` |`true` |Enable collection and reporting.
-|`hop.coverage.basedir` |`.` |Base directory paths are reported relative to.
+|`hop.coverage.basedir` |`.` |Base directory paths are reported relative to; use the checkout root for GitLab.
 |`hop.coverage.workDir` |`target/hop-coverage` |Working directory for raw executions.
 |`hop.coverage.rawDir` |`<workDir>/raw` |Where the per-JVM raw JSON reports are written.
 |`hop.coverage.siteDir` |`target/hop-coverage/report` |Where the rendered reports are written.
-|`hop.coverage.report.format` |`JSON,HTML,ADOC` |Comma-separated list of `JSON`, `HTML`, `ADOC`.
+|`hop.coverage.report.format` |`JSON,HTML,ADOC` |Comma-separated list of `JSON`, `HTML`, `ADOC`, `JACOCO`; JaCoCo export is opt-in.
+|`hop.coverage.report.jacoco.output` |`<siteDir>/jacoco.xml` |Optional JaCoCo XML destination; an explicitly blank value is invalid. Setting this property does not enable `JACOCO`.
 |`hop.coverage.requiredCoverage` |unset |Global required coverage in percent (e.g. `80`).
 |`hop.coverage.requiredCoverage.<ARTIFACT>` |global value |Per-artifact override, e.g. `hop.coverage.requiredCoverage.T_LOAD=66.0` (artifact name without extension).
 |`hop.coverage.failOnMalformedReport` |`true` |Fail the build when a raw report is malformed.
-|`hop.coverage.failOnWriteError` |`true` |Fail the build when a report cannot be written.
+|`hop.coverage.failOnWriteError` |`true` |Fail the build when a report cannot be written, including strict JaCoCo source mapping/export failures.
 |`hop.report.adoc.output` |`target/hop-coverage/report/coverage.adoc` |Where the ADOC report is written (include it in your own docs with `include::`).
 |===
 
@@ -82,6 +83,10 @@ With `hop.coverage.report.format=JSON,HTML,ADOC`, the session close produces:
   `target/hop-coverage/report/coverage.adoc`), designed to be pulled into your own AsciiDoc
   documentation with a standard `include` directive pointing at that generated file.
 
+Add `JACOCO` to `hop.coverage.report.format` to also write `jacoco.xml` under `hop.coverage.siteDir`.
+Only this new output default follows `siteDir`; changing `workDir` or `siteDir` does not relocate the existing independent site or ADOC defaults.
+Keep Hop XML separate from Java JaCoCo XML, for example `target/hop-coverage/report/jacoco.xml` versus `target/site/jacoco/jacoco.xml`, so neither report overwrites the other.
+
 == Metrics
 
 For each execution Hop JUnit records:
@@ -94,3 +99,131 @@ For each execution Hop JUnit records:
 * **summary** - node coverage ratio, edge coverage ratio and branch coverage ratio
   (an edge is a branch when its source transform has several enabled outgoing edges);
 * **run** - the JUnit test (class, method, display name, unique id) and the timing of the execution.
+
+== GitLab coverage
+
+GitLab support has two independent parts: a numeric job coverage value extracted from the log, and merge-request diff annotations from JaCoCo-compatible XML.
+The XML integration requires GitLab 17.6 or later.
+Both expose *Hop edge graph coverage*, not Java code coverage, and do not imply that arbitrary XML lines were executed.
+The raw JSON schema is unchanged by either integration.
+
+=== Job coverage from the log
+
+The post-processor emits a stable INFO message with a decimal point and two decimal places, for example:
+
+[source,text]
+----
+Hop Coverage Total: 83.33%
+----
+
+This percentage is covered enabled Hop edges divided by total enabled Hop edges in the processed report.
+Keep INFO logging enabled for `io.yupiik.hop.junit.hop.coverage.HopCoveragePostProcessor` in the test JVM so GitLab can see it.
+When there are no artifacts, a nonnumeric diagnostic is emitted and the numeric regex intentionally does not match it.
+An artifact with zero enabled edges retains the existing empty-graph convention of `100.00%`, accompanied by an explicit diagnostic.
+The value describes the report processed by that session, not a Maven reactor-wide total.
+With multiple matching log messages in one job, GitLab uses the last matching value; it does not sum or average modules or forks.
+Use separate jobs if you need separate module coverage values.
+
+=== Diff annotations and source requirements
+
+The JaCoCo export maps each enabled Hop edge to the line containing its opening `<hop>` tag in the exact `.hpl` or `.hwf` source.
+It uses synthetic instruction counters to represent covered and missed edges, including multiple edges sharing a source line.
+GitLab marks a line green when its covered-instruction count (`ci`) is greater than zero, so green does not necessarily mean every edge on that line was covered.
+Disabled edges are excluded, and JaCoCo branch counters are absent: this is not a Java instruction or Java branch metric.
+
+Source files must be available under `hop.coverage.basedir`, with unambiguous paths relative to that directory.
+For GitLab, that directory must be the repository checkout root (`CI_PROJECT_DIR`), so paths in the XML match files in the merge request.
+The exporter does not guess sources outside `basedir`, search for a similarly named file elsewhere, or silently export only the artifacts it can map.
+The exact source must match what was executed, including Hop topology and line layout; do not edit, regenerate or reformat it between execution and export.
+Generated, copied or parameterized artifacts are only usable for diff annotations when the exact executed source can be resolved under the checkout root and corresponds to the repository file shown by GitLab.
+A temporary generated copy does not automatically map back to its original template, and an untracked generated file has no repository diff to annotate.
+
+Export is strict and all-or-nothing: missing, unreadable, malformed, out-of-base-directory or otherwise unmappable source prevents the whole JaCoCo export rather than producing misleading partial coverage.
+Ambiguous parallel hops and incompatible graph definitions across executions are rejected.
+The XML is published from a temporary sibling only after all sources map, using an atomic move where supported (otherwise a replacing move), and a failed export removes its previous output rather than leaving stale annotations.
+Output paths colliding with a source, raw data, or another selected report are rejected without deleting those files.
+With `hop.coverage.failOnWriteError=true` (the default), an export failure fails the build.
+Setting it to `false` allows the build to continue with a diagnostic, but does not relax mapping rules or produce a partial XML report.
+Other selected formats are still attempted after an export failure, and coverage threshold violations are never suppressed by `failOnWriteError`.
+The summary is logged before rendering or threshold enforcement; reports are rendered before threshold enforcement.
+
+=== Single-module example
+
+For a single-module project whose Maven project directory is the checkout root, configure Surefire:
+
+[source,xml]
+----
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-surefire-plugin</artifactId>
+  <configuration>
+    <systemPropertyVariables>
+      <hop.coverage.basedir>${project.basedir}</hop.coverage.basedir>
+      <hop.coverage.workDir>${project.build.directory}/hop-coverage</hop.coverage.workDir>
+      <hop.coverage.rawDir>${project.build.directory}/hop-coverage/raw</hop.coverage.rawDir>
+      <hop.coverage.siteDir>${project.build.directory}/hop-coverage/report</hop.coverage.siteDir>
+      <hop.coverage.report.format>JSON,HTML,ADOC,JACOCO</hop.coverage.report.format>
+    </systemPropertyVariables>
+  </configuration>
+</plugin>
+----
+
+No output property is needed: the XML defaults to `<siteDir>/jacoco.xml`.
+Configure `.gitlab-ci.yml` to consume the numeric log message and XML independently:
+
+[source,yaml]
+----
+hop-tests:
+  stage: test
+  script:
+    - mvn -B -Dmaven.logger.defaultLogLevel=info clean verify
+  coverage: '/Hop Coverage Total: ([0-9]+\.[0-9]{2})%/'
+  artifacts:
+    when: always
+    paths:
+      - target/hop-coverage/
+    reports:
+      coverage_report:
+        coverage_format: jacoco
+        path: target/hop-coverage/report/jacoco.xml
+----
+
+The Maven logging flag makes Maven INFO output visible, including with Maven 4's WARN default; configure the test JVM's logging backend separately if it suppresses the coverage INFO message.
+Keep the job's normal JDK and Maven image/tool setup; the snippet only shows coverage-specific configuration.
+
+=== Multi-module builds
+
+In GitLab, set `hop.coverage.basedir` to `${env.CI_PROJECT_DIR}` in each module's Surefire configuration, not `${project.basedir}` when that points at a subdirectory.
+Keep `workDir`, `rawDir` and `siteDir` module-local using `${project.build.directory}` as in the single-module example, avoiding modules overwriting or ingesting each other's data.
+Upload their XML reports with a wildcard, for example:
+
+[source,yaml]
+----
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: jacoco
+        path: '**/target/hop-coverage/report/jacoco.xml'
+----
+
+This lets GitLab consume multiple XML reports for diff visualization; it does not create a reactor-wide `Hop Coverage Total` log value.
+The job-level `coverage` regex still uses the last matching log message.
+GitLab does not support an aggregated multi-module JaCoCo report; use separate flat files as above rather than a grouped report.
+
+Forks contributing to the same module report must share `basedir`, `workDir`, `rawDir`, `siteDir` and XML output so the same post-processing lock protects every writer.
+Do not let unrelated modules write to an arbitrary shared XML destination.
+Use fresh raw directories per build or run `clean` to avoid including executions left by an earlier run.
+There is no dedicated final reactor/fork summarizer: a session processes the raw reports published when it acquires the shared lock.
+
+=== GitLab display limitations
+
+Diff annotations appear only on changed lines in a merge request, after GitLab processes the report in the background when the pipeline completes.
+Blocking manual jobs can delay that completion.
+A green hop line means at least one edge on that line was covered; XML line coverage can differ from the edge-weighted log percentage.
+GitLab may not record the numeric coverage value for a failed job, even though Hop logs it before threshold failure.
+Use `artifacts:when:always` to retain XML for inspection when thresholds fail.
+Child-pipeline XML can contribute diff annotations, but child-pipeline numeric coverage is not included in the parent merge-request coverage widget.
+
+For a custom XML destination such as `target/site/jacoco/jacoco.xml`, pass `-Dhop.coverage.report.jacoco.output=target/site/jacoco/jacoco.xml` and update both `artifacts:paths` and `artifacts:reports:coverage_report:path` accordingly.
+Do not choose that destination if Java JaCoCo already owns it.
